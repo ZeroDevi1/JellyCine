@@ -6,6 +6,7 @@ import com.vela.player.preferences.PlayerPreferences
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 object MpvWarmPool {
@@ -14,11 +15,14 @@ object MpvWarmPool {
     private val lock = Any()
     private var warmedPlayer: WarmedPlayer? = null
     private var warmingConfig: MpvWarmConfig? = null
+    private var liveController: MpvPlayerController? = null
+    private var creating = false
 
     suspend fun warmIfPreferred(context: Context) {
         val appContext = context.applicationContext
         val preferences = PlayerPreferences(appContext)
-        if (preferences.getPlayerEngine() != PlayerPreferences.PLAYER_ENGINE_MPV) {
+        val engineIsMpv = preferences.getPlayerEngine() == PlayerPreferences.PLAYER_ENGINE_MPV
+        if (!engineIsMpv) {
             release()
             return
         }
@@ -26,12 +30,18 @@ object MpvWarmPool {
         val config = MpvWarmConfig.from(preferences)
         var replacedPlayer: MpvPlayerController? = null
         val shouldStartWarmup = synchronized(lock) {
-            if (warmedPlayer?.config == config || warmingConfig == config) {
+            val decision = decideMpvWarmup(
+                engineIsMpv = true,
+                hasLiveController = liveController != null || creating,
+                alreadyWarmOrWarming = warmedPlayer?.config == config || warmingConfig == config
+            )
+            if (decision != MpvWarmDecision.StartWarmup) {
                 false
             } else {
                 replacedPlayer = warmedPlayer?.controller
                 warmedPlayer = null
                 warmingConfig = config
+                creating = true
                 true
             }
         }
@@ -56,20 +66,24 @@ object MpvWarmPool {
         } catch (error: CancellationException) {
             synchronized(lock) {
                 if (warmingConfig == config) warmingConfig = null
+                creating = false
             }
             throw error
         } catch (error: Throwable) {
             synchronized(lock) {
                 if (warmingConfig == config) warmingConfig = null
+                creating = false
             }
             Log.e(TAG, "MPV warmup skipped", error)
             return
         }
 
         val shouldKeep = synchronized(lock) {
+            creating = false
             val currentConfig = MpvWarmConfig.from(PlayerPreferences(appContext))
             val canKeep = warmingConfig == config &&
                 currentConfig == config &&
+                liveController == null &&
                 PlayerPreferences(appContext).getPlayerEngine() == PlayerPreferences.PLAYER_ENGINE_MPV
             warmingConfig = null
             if (canKeep) {
@@ -79,32 +93,87 @@ object MpvWarmPool {
         }
 
         if (!shouldKeep) {
-            controller.release()
+            val liveExists = synchronized(lock) { liveController != null }
+            if (!liveExists) {
+                controller.release()
+            }
         }
     }
 
-    fun acquire(
+    suspend fun obtain(
         context: Context,
         listener: MpvPlayerController.Listener
-    ): MpvPlayerController? {
-        val config = MpvWarmConfig.from(PlayerPreferences(context.applicationContext))
-        var stalePlayer: MpvPlayerController? = null
-        var player: MpvPlayerController? = null
-        synchronized(lock) {
-            val warmed = warmedPlayer
-            if (warmed != null) {
-                warmedPlayer = null
-                if (warmed.config == config) {
-                    player = warmed.controller
-                } else {
-                    stalePlayer = warmed.controller
+    ): MpvPlayerController {
+        val appContext = context.applicationContext
+        val config = MpvWarmConfig.from(PlayerPreferences(appContext))
+        while (true) {
+            var stalePlayer: MpvPlayerController? = null
+            val action = synchronized(lock) {
+                when {
+                    creating -> ObtainAction.Wait
+                    liveController != null -> ObtainAction.Use(liveController!!)
+                    else -> {
+                        val warmed = warmedPlayer
+                        if (warmed != null) {
+                            warmedPlayer = null
+                            if (warmed.config == config) {
+                                liveController = warmed.controller
+                                ObtainAction.Use(warmed.controller)
+                            } else {
+                                stalePlayer = warmed.controller
+                                ObtainAction.Wait
+                            }
+                        } else {
+                            creating = true
+                            ObtainAction.Create
+                        }
+                    }
+                }
+            }
+            stalePlayer?.release()
+            when (action) {
+                ObtainAction.Wait -> delay(16)
+                ObtainAction.Create -> break
+                is ObtainAction.Use -> {
+                    action.controller.setListener(listener)
+                    return action.controller
                 }
             }
         }
 
-        stalePlayer?.release()
-        player?.setListener(listener)
-        return player
+        try {
+            val created = withContext(Dispatchers.Main) {
+                MpvPlayerController(
+                    context = appContext,
+                    hardwareDecoding = config.hardwareDecoding,
+                    videoOutput = config.videoOutput,
+                    audioOutput = config.audioOutput,
+                    listener = listener
+                )
+            }
+            synchronized(lock) {
+                creating = false
+                liveController = created
+            }
+            return created
+        } catch (error: CancellationException) {
+            synchronized(lock) { creating = false }
+            throw error
+        } catch (error: Throwable) {
+            synchronized(lock) { creating = false }
+            throw error
+        }
+    }
+
+    fun notifyReleased(controller: MpvPlayerController) {
+        synchronized(lock) {
+            if (liveController === controller) {
+                liveController = null
+            }
+            if (warmedPlayer?.controller === controller) {
+                warmedPlayer = null
+            }
+        }
     }
 
     fun release() {
@@ -115,6 +184,12 @@ object MpvWarmPool {
             }
         }
         player?.release()
+    }
+
+    private sealed class ObtainAction {
+        data class Use(val controller: MpvPlayerController) : ObtainAction()
+        data object Wait : ObtainAction()
+        data object Create : ObtainAction()
     }
 
     private data class WarmedPlayer(

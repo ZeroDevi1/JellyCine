@@ -1,6 +1,7 @@
 package com.vela.app.ui.components.common
 
 import android.content.Context
+import android.view.TextureView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -22,14 +23,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import com.vela.player.core.PlayerUtils
 import com.vela.player.core.RemoteTrailerUrl
 import androidx.compose.ui.platform.LocalConfiguration
@@ -176,6 +176,7 @@ fun InlineTrailerPlayer(
 
     DisposableEffect(Unit) {
         onDispose {
+            player.clearVideoSurface()
             player.release()
         }
     }
@@ -183,22 +184,19 @@ fun InlineTrailerPlayer(
     Box(modifier = modifier) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                TextureView(ctx).apply {
                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    setPadding(0, 0, 0, 0)
                     layoutParams = android.view.ViewGroup.LayoutParams(
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    this.player = player
+                    player.setVideoTextureView(this)
                     alpha = 0f
                     keepScreenOn = true
                 }
             },
             update = { view ->
+                player.setVideoTextureView(view)
                 view.alpha = playerAlpha
                 view.keepScreenOn = isVisible && !playbackCompleted.value
             },
@@ -239,5 +237,6 @@ private fun createInlineExoPlayer(context: Context): ExoPlayer {
     ).apply {
         repeatMode = Player.REPEAT_MODE_OFF
         setHandleAudioBecomingNoisy(false)
+        videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
     }
 }

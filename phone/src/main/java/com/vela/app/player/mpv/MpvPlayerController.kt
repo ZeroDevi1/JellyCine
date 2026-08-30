@@ -292,6 +292,7 @@ class MpvPlayerController(
     fun release() {
         if (released) return
         released = true
+        MpvWarmPool.notifyReleased(this)
         runCatching { MPVLib.removeObserver(this) }
         runCatching { MPVLib.detachSurface() }
         runCatching { MPVLib.destroy() }

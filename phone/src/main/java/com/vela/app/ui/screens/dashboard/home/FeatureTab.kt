@@ -81,6 +81,7 @@ import com.vela.data.repository.AuthRepository.ActiveSessionSnapshot
 import com.vela.data.repository.AuthRepositoryProvider
 import com.vela.data.repository.MediaRepositoryProvider
 import com.vela.shared.preferences.Preferences
+import com.vela.app.playback.ActivePlayback
 import com.vela.app.ui.components.common.InlineTrailerPlayer
 import androidx.compose.ui.platform.LocalConfiguration
 import kotlinx.coroutines.CancellationException
@@ -255,7 +256,9 @@ fun FeatureTab(
     var isAutoScrolling by remember { mutableStateOf(false) }
     val autoplayTrailersEnabled by preferences.autoplayTrailersEnabled()
         .collectAsState(initial = preferences.isAutoplayTrailersEnabled())
+    val playbackActive by ActivePlayback.isActive.collectAsState()
     val isAutoplayAllowed = autoplayTrailersEnabled &&
+            !playbackActive &&
             (carouselHeight == Preferences.FEATURE_CAROUSEL_HEIGHT_MEDIUM ||
              carouselHeight == Preferences.FEATURE_CAROUSEL_HEIGHT_SMALL)
     var currentPlayingTrailerUrl by remember { mutableStateOf<String?>(null) }
@@ -492,12 +495,21 @@ fun FeatureTab(
         }
     }
 
+    LaunchedEffect(playbackActive) {
+        if (playbackActive) {
+            currentPlayingTrailerUrl = null
+            isTrailerPlaying = false
+            trailerPlaybackCompleted = true
+        }
+    }
+
     LaunchedEffect(
         featuredKeys,
         isLoading,
         autoScroll,
         initialCarouselScrollOffsetPx,
-        autoplayTrailersEnabled
+        autoplayTrailersEnabled,
+        playbackActive
     ) {
         if (isLoading || resolvedFeaturedItems.value.size <= 1 || !autoScroll) return@LaunchedEffect
 
