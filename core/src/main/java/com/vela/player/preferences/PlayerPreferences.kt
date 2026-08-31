@@ -33,6 +33,8 @@ class PlayerPreferences(context: Context) {
         private const val KEY_MPV_TARGET_PRIM = "mpv_target_prim"
         private const val KEY_MPV_TARGET_TRC = "mpv_target_trc"
         private const val KEY_MPV_OUTPUT_LEVELS = "mpv_output_levels"
+        private const val KEY_DOLBY_BRIGHTNESS_ENHANCEMENT = "dolby_brightness_enhancement"
+        private const val KEY_DOLBY_DV7_TO_DV81 = "dolby_dv7_to_dv81"
         private const val KEY_HARDWARE_ACCELERATION = "hardware_acceleration_enabled"
         private const val KEY_ASYNC_MEDIACODEC = "async_mediacodec_enabled"
         private const val KEY_DECODER_PRIORITY = "decoder_priority"
@@ -231,6 +233,8 @@ class PlayerPreferences(context: Context) {
         const val DEFAULT_MPV_DEBAND = false
         const val DEFAULT_MPV_DYNAMIC_PEAK = true
         const val DEFAULT_MPV_HDR_TO_SDR_TONEMAPPING = false
+        const val DEFAULT_DOLBY_BRIGHTNESS_ENHANCEMENT = true
+        const val DEFAULT_DOLBY_DV7_TO_DV81 = false
         const val MPV_TARGET_PRIM_AUTO = "auto"
         const val MPV_TARGET_PRIM_BT709 = "bt.709"
         const val MPV_TARGET_PRIM_BT2020 = "bt.2020"
@@ -739,6 +743,22 @@ class PlayerPreferences(context: Context) {
 
     fun setMpvHdrToSdrTonemapping(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MPV_HDR_TO_SDR_TONEMAPPING, enabled).commit()
+    }
+
+    fun isDolbyBrightnessEnhancementEnabled(): Boolean {
+        return prefs.getBoolean(KEY_DOLBY_BRIGHTNESS_ENHANCEMENT, DEFAULT_DOLBY_BRIGHTNESS_ENHANCEMENT)
+    }
+
+    fun setDolbyBrightnessEnhancementEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DOLBY_BRIGHTNESS_ENHANCEMENT, enabled).apply()
+    }
+
+    fun isDolbyDv7ToDv81Enabled(): Boolean {
+        return prefs.getBoolean(KEY_DOLBY_DV7_TO_DV81, DEFAULT_DOLBY_DV7_TO_DV81)
+    }
+
+    fun setDolbyDv7ToDv81Enabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DOLBY_DV7_TO_DV81, enabled).apply()
     }
 
     fun getMpvTargetPrim(): String {

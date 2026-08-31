@@ -77,12 +77,21 @@ fun PersonScreenContainer(
     val activeServerId by authRepository.getActiveServerId()
         .collectAsState(initial = authRepository.getActiveSessionSnapshot().activeServerId)
     val seerTmdbId = remember(personId) { SeerrItemIds.personTmdbId(personId) }
+    val cachedPerson = remember(personId, activeServerId) {
+        DetailPageCache.person(personId, activeServerId)
+    }
 
-    var person by remember(personId) { mutableStateOf<BaseItemDto?>(null) }
-    var relatedTitles by remember(personId) { mutableStateOf<List<BaseItemDto>>(emptyList()) }
-    var seerrRelatedTitles by remember(personId) { mutableStateOf<List<SeerrRecommendationTitle>>(emptyList()) }
-    var isLoading by remember(personId) { mutableStateOf(true) }
-    var hasError by remember(personId) { mutableStateOf(false) }
+    var person by remember(personId, activeServerId) { mutableStateOf(cachedPerson?.person) }
+    var relatedTitles by remember(personId, activeServerId) {
+        mutableStateOf(cachedPerson?.relatedTitles.orEmpty())
+    }
+    var seerrRelatedTitles by remember(personId, activeServerId) {
+        mutableStateOf(cachedPerson?.seerrRelatedTitles.orEmpty())
+    }
+    var isLoading by remember(personId, activeServerId) {
+        mutableStateOf(cachedPerson?.hasContent != true)
+    }
+    var hasError by remember(personId, activeServerId) { mutableStateOf(false) }
     var expandedWorksType by rememberSaveable(personId) { mutableStateOf<String?>(null) }
     val playScope = rememberCoroutineScope()
 
@@ -109,17 +118,24 @@ fun PersonScreenContainer(
     }
 
     LaunchedEffect(personId, activeServerId) {
-        isLoading = true
+        val hadContent = person != null ||
+            relatedTitles.isNotEmpty() ||
+            seerrRelatedTitles.isNotEmpty()
+        if (!hadContent) {
+            isLoading = true
+        }
         hasError = false
 
         try {
             if (seerTmdbId != null) {
                 val scopeId = activeServerId?.takeIf { it.isNotBlank() }
                 if (scopeId == null) {
-                    person = null
-                    relatedTitles = emptyList()
-                    seerrRelatedTitles = emptyList()
-                    hasError = true
+                    if (!hadContent) {
+                        person = null
+                        relatedTitles = emptyList()
+                        seerrRelatedTitles = emptyList()
+                        hasError = true
+                    }
                 } else {
                     val (personResult, directedTitles) = coroutineScope {
                         val personDeferred = async { seerrRepository.getPersonDetails(scopeId, seerTmdbId) }
@@ -137,6 +153,17 @@ fun PersonScreenContainer(
                     relatedTitles = emptyList()
                     seerrRelatedTitles = directedTitles
                     hasError = person == null
+                    if (person != null || directedTitles.isNotEmpty()) {
+                        DetailPageCache.putPerson(
+                            personId = personId,
+                            serverId = activeServerId,
+                            snapshot = DetailPageCache.PersonSnapshot(
+                                person = person,
+                                relatedTitles = emptyList(),
+                                seerrRelatedTitles = directedTitles
+                            )
+                        )
+                    }
                 }
             } else {
                 val (personResult, relatedResult) = coroutineScope {
@@ -149,12 +176,25 @@ fun PersonScreenContainer(
                 relatedTitles = relatedResult.getOrDefault(emptyList())
                 seerrRelatedTitles = emptyList()
                 hasError = person == null
+                if (person != null || relatedTitles.isNotEmpty()) {
+                    DetailPageCache.putPerson(
+                        personId = personId,
+                        serverId = activeServerId,
+                        snapshot = DetailPageCache.PersonSnapshot(
+                            person = person,
+                            relatedTitles = relatedTitles,
+                            seerrRelatedTitles = emptyList()
+                        )
+                    )
+                }
             }
         } catch (_: Exception) {
-            hasError = true
-            person = null
-            relatedTitles = emptyList()
-            seerrRelatedTitles = emptyList()
+            if (!hadContent) {
+                hasError = true
+                person = null
+                relatedTitles = emptyList()
+                seerrRelatedTitles = emptyList()
+            }
         } finally {
             isLoading = false
         }

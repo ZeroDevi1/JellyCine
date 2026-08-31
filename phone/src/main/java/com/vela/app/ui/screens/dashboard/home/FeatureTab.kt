@@ -83,6 +83,7 @@ import com.vela.data.repository.MediaRepositoryProvider
 import com.vela.shared.preferences.Preferences
 import com.vela.app.playback.ActivePlayback
 import com.vela.app.ui.components.common.InlineTrailerPlayer
+import com.vela.app.ui.screens.detail.DetailPageCache
 import androidx.compose.ui.platform.LocalConfiguration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +117,7 @@ internal object CachedData {
         featuredItems = emptyList()
         lastLoadTime = 0
         _isCurrentlyLoading = false
+        DetailPageCache.clear()
     }
 
     fun markAsLoading(loading: Boolean) {

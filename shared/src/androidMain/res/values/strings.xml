@@ -221,6 +221,10 @@
     <string name="player_settings_mpv_target_trc">Target Transfer</string>
     <string name="player_settings_mpv_output_levels">Video Output Levels</string>
     <string name="player_settings_mpv_color_restart_hint">Reopen playback after changing</string>
+    <string name="player_settings_dolby_brightness">Dolby brightness boost</string>
+    <string name="player_settings_dolby_brightness_summary">Applies to Dolby Vision only. May overexpose</string>
+    <string name="player_settings_dolby_dv7_to_dv81">Convert DV Profile 7 to 8.1</string>
+    <string name="player_settings_dolby_dv7_to_dv81_summary">Turn off if playback looks wrong. Reopen the current video</string>
     <string name="player_settings_section_decoding">Decoding</string>
     <string name="player_settings_section_subtitles">Subtitles</string>
     <string name="player_settings_section_transcoding">Transcoding</string>

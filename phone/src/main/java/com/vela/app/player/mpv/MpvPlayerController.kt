@@ -8,6 +8,7 @@ import android.view.Surface
 import androidx.media3.common.util.UnstableApi
 import com.vela.player.core.PlayerUtils
 import com.vela.player.preferences.PlayerPreferences
+import com.vela.player.video.HdrCapabilityManager
 import `is`.xyz.mpv.MPVLib
 import `is`.xyz.mpv.MPVLib.MpvEvent
 import `is`.xyz.mpv.MPVLib.MpvFormat
@@ -24,6 +25,7 @@ class MpvPlayerController(
 
     companion object {
         private const val SUBTITLE_LOG_TAG = "JellyCine-Sub"
+        private const val DOLBY_LOG_TAG = "MpvDolby"
     }
 
     interface Listener {
@@ -50,6 +52,7 @@ class MpvPlayerController(
     private var surfaceHeight = 0
     private var subtitleFontFamily: String = "sans-serif"
     private val playerPreferences = PlayerPreferences(context.applicationContext)
+    private var lastDolbyRuntimePath: String? = null
     @Volatile
     private var listener: Listener = listener
 
@@ -98,10 +101,12 @@ class MpvPlayerController(
         pendingSubtitleUrls = subtitleUrls
         pendingSelectedSubtitleUrl = selectedSubtitleUrl
         pendingSubtitleTrackId = subtitleTrackId?.takeUnless { it == "no" }
+        lastDolbyRuntimePath = null
         MPVLib.setPropertyBoolean("pause", true)
         listener.onBuffering()
         applyRemoteStreamOptions(remoteHttpPlayback)
         applyHttpRequestHeaders(requestHeaders)
+        applyDolbyDecodeOptions(asOptions = false)
         val needsEmbeddedSubtitleProbe =
             selectedSubtitleUrl == null && pendingSubtitleTrackId != null
         if (needsEmbeddedSubtitleProbe && !remoteHttpPlayback) {
@@ -345,6 +350,7 @@ class MpvPlayerController(
                 pendingSelectedSubtitleUrl = null
                 pendingSubtitleTrackId = null
                 applySubtitlePreferences()
+                applyDolbyRuntimeOptions()
                 logSubtitleTracks("FILE_LOADED")
                 val resumePositionMs = pendingStartPositionMs
                 pendingStartPositionMs = null
@@ -363,6 +369,7 @@ class MpvPlayerController(
                     logSubtitleTracks("READY")
                 }
             }
+            MpvEvent.MPV_EVENT_VIDEO_RECONFIG -> applyDolbyRuntimeOptions()
             MpvEvent.MPV_EVENT_SHUTDOWN -> Unit
             else -> Unit
         }
@@ -404,6 +411,7 @@ class MpvPlayerController(
             "hdr-compute-peak",
             if (playerPreferences.getMpvDynamicPeak()) "yes" else "no"
         )
+        applyDolbyDecodeOptions(asOptions = true)
         MPVLib.setOptionString("tscale", "oversample")
         applySpeedPerformance(1.0, asOptions = true)
         MPVLib.setOptionString("ao", audioOutput)
@@ -464,6 +472,52 @@ class MpvPlayerController(
             setMpv("demuxer-lavf-analyzeduration", "10")
             setMpv("demuxer-lavf-probe-info", "on")
         }
+    }
+
+    private fun applyDolbyDecodeOptions(asOptions: Boolean) {
+        val deviceSupport = HdrCapabilityManager.getDeviceHdrSupport(appContext)
+        val options = DolbyVisionMpv.decodeOptions(
+            convertDv7ToDv81 = playerPreferences.isDolbyDv7ToDv81Enabled(),
+            deviceSupportsDolbyVision = deviceSupport == HdrCapabilityManager.HdrSupport.DOLBY_VISION
+        )
+        Log.i(
+            DOLBY_LOG_TAG,
+            "decode path=${options.playbackPath} vf=${options.vf.ifBlank { "<none>" }} " +
+                "vd-lavc-o=${options.vdLavcO.ifBlank { "<none>" }}"
+        )
+        if (asOptions) {
+            MPVLib.setOptionString("vf", options.vf)
+            MPVLib.setOptionString("vd-lavc-o", options.vdLavcO)
+        } else {
+            setMpv("vf", options.vf)
+            setMpv("vd-lavc-o", options.vdLavcO)
+        }
+    }
+
+    private fun applyDolbyRuntimeOptions() {
+        if (released) return
+        val isDolbyVision = DolbyVisionMpv.isDolbyVisionTrack(
+            codec = MPVLib.getPropertyString("video-codec"),
+            format = MPVLib.getPropertyString("video-format"),
+            doviFlag = MPVLib.getPropertyString("video-params/dolbyvision")
+                ?: MPVLib.getPropertyString("metadata/dovi.profile")
+        )
+        val options = DolbyVisionMpv.runtimeOptions(
+            isDolbyVisionContent = isDolbyVision,
+            brightnessEnhancement = playerPreferences.isDolbyBrightnessEnhancementEnabled(),
+            dynamicPeakEnabled = playerPreferences.getMpvDynamicPeak()
+        )
+        if (options.playbackPath == lastDolbyRuntimePath) {
+            return
+        }
+        lastDolbyRuntimePath = options.playbackPath
+        Log.i(
+            DOLBY_LOG_TAG,
+            "runtime path=${options.playbackPath} hdr-compute-peak=${options.hdrComputePeak} " +
+                "tone-mapping-max-boost=${options.toneMappingMaxBoost}"
+        )
+        setMpv("hdr-compute-peak", options.hdrComputePeak)
+        setMpv("tone-mapping-max-boost", options.toneMappingMaxBoost)
     }
 
     private fun applyHttpRequestHeaders(requestHeaders: Map<String, String>) {

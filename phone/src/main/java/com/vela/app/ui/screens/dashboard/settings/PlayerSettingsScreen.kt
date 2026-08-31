@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.BatteryStd
+import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material.icons.rounded.Brush
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ClosedCaption
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VideoSettings
 import androidx.compose.material.icons.rounded.WbSunny
@@ -354,6 +356,24 @@ fun PlayerSettingsScreen(
                             subtitle = "Tone map HDR content to SDR for accurate colors",
                             checked = uiState.mpvHdrToSdrTonemapping,
                             onCheckedChange = viewModel::setMpvHdrToSdrTonemapping,
+                            accentColor = renderingColor
+                        )
+                        SettingsDivider()
+                        SwitchSettingsItem(
+                            icon = Icons.Rounded.BrightnessHigh,
+                            title = stringResource(R.string.player_settings_dolby_brightness),
+                            subtitle = stringResource(R.string.player_settings_dolby_brightness_summary),
+                            checked = uiState.dolbyBrightnessEnhancement,
+                            onCheckedChange = viewModel::setDolbyBrightnessEnhancement,
+                            accentColor = renderingColor
+                        )
+                        SettingsDivider()
+                        SwitchSettingsItem(
+                            icon = Icons.Rounded.Sync,
+                            title = stringResource(R.string.player_settings_dolby_dv7_to_dv81),
+                            subtitle = stringResource(R.string.player_settings_dolby_dv7_to_dv81_summary),
+                            checked = uiState.dolbyDv7ToDv81,
+                            onCheckedChange = viewModel::setDolbyDv7ToDv81,
                             accentColor = renderingColor
                         )
                     }

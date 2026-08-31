@@ -220,6 +220,10 @@
     <string name="player_settings_mpv_target_trc">目标伽马</string>
     <string name="player_settings_mpv_output_levels">视频输出电平</string>
     <string name="player_settings_mpv_color_restart_hint">改完需重新打开播放</string>
+    <string name="player_settings_dolby_brightness">杜比亮度增强</string>
+    <string name="player_settings_dolby_brightness_summary">只作用于杜比视界，可能过曝</string>
+    <string name="player_settings_dolby_dv7_to_dv81">杜比 DV7 转 DV8.1</string>
+    <string name="player_settings_dolby_dv7_to_dv81_summary">画面异常可关；改完需重开当前片</string>
     <string name="player_settings_section_decoding">解码</string>
     <string name="player_settings_section_subtitles">字幕</string>
     <string name="player_settings_section_transcoding">转码</string>

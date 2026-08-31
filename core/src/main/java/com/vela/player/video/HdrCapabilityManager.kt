@@ -171,7 +171,15 @@ object HdrCapabilityManager {
         }
         
         // Device doesn't support the content format, need fallback
-        Log.d(TAG, "Device doesn't support content format, using fallback")
+        val fallbackPath = when {
+            videoFormat.isDolbyVision &&
+                (deviceSupport == HdrSupport.HDR10_PLUS || deviceSupport == HdrSupport.HDR10) -> "dv-to-hdr10"
+            videoFormat.isDolbyVision && deviceSupport == HdrSupport.HLG -> "dv-to-hlg"
+            videoFormat.isDolbyVision && deviceSupport == HdrSupport.SDR -> "dv-to-sdr"
+            deviceSupport == HdrSupport.SDR -> "hdr-to-sdr"
+            else -> "format-fallback"
+        }
+        Log.i(TAG, "Device doesn't support content format, fallback path=$fallbackPath")
         
         return when (deviceSupport) {
             HdrSupport.HDR10_PLUS, HdrSupport.HDR10 -> {

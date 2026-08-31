@@ -110,8 +110,11 @@ fun DetailScreenContainer(
     val activeServerId by authRepository.getActiveServerId()
         .collectAsState(initial = authRepository.getActiveSessionSnapshot().activeServerId)
 
-    var item by remember { mutableStateOf<BaseItemDto?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    val cachedItem = remember(itemId, activeServerId) {
+        DetailPageCache.item(itemId, activeServerId)
+    }
+    var item by remember(itemId, activeServerId) { mutableStateOf(cachedItem) }
+    var isLoading by remember(itemId, activeServerId) { mutableStateOf(cachedItem == null) }
     var error by remember { mutableStateOf<String?>(null) }
     var preferredMediaSourceId by rememberSaveable { mutableStateOf<String?>(null) }
     var playbackStartFromBeginning by remember { mutableStateOf(false) }
@@ -463,8 +466,11 @@ fun DetailScreenContainer(
     }
 
     LaunchedEffect(itemId, activeServerId) {
+        val hadItem = item != null
         try {
-            isLoading = true
+            if (!hadItem) {
+                isLoading = true
+            }
             error = null
 
             val result = loadDetailItem(
@@ -476,15 +482,20 @@ fun DetailScreenContainer(
             result.fold(
                 onSuccess = { fetchedItem ->
                     item = fetchedItem
+                    DetailPageCache.putItem(itemId, activeServerId, fetchedItem)
                     isLoading = false
                 },
                 onFailure = { exception ->
-                    error = exception.message
+                    if (!hadItem) {
+                        error = exception.message
+                    }
                     isLoading = false
                 }
             )
         } catch (e: Exception) {
-            error = e.message
+            if (!hadItem) {
+                error = e.message
+            }
             isLoading = false
         }
     }
@@ -526,6 +537,7 @@ fun DetailScreenContainer(
         if (item?.id == refreshedItemId || itemId == refreshedItemId) {
             mediaRepository.getItemById(refreshedItemId).getOrNull()?.let { refreshedItem ->
                 item = refreshedItem
+                DetailPageCache.putItem(itemId, activeServerId, refreshedItem)
             }
         }
 

@@ -45,7 +45,7 @@ TV：本轮以手机为准。目录、搜索、日历、Trakt 能下沉 `data` �
 - Release 正文来自 `docs/release-notes.md` 对应版本章节（简介 + 要点），标题 `Vela v{version}`，不用 GitHub 自动 changelog
 - tag 与 `appVersionName` 不一致直接 fail；缺 `VELA_STORE_FILE_BASE64` / `VELA_STORE_PASSWORD` / `VELA_KEY_PASSWORD` 时列出缺项并拒绝 unsigned
 - 构建后 `apksigner verify`，未签名不发 Release
-- 版本在根 `build.gradle`：`appVersionName` / `appVersionCode`（当前 `1.0.1` / `2`）
+- 版本在根 `build.gradle`：`appVersionName` / `appVersionCode`（当前 `1.0.3` / `3`）
 - APK 名：`vela-phone-release-{version}-{abi}.apk`、`vela-tv-release-{version}-{abi}.apk`
 
 ### 做法
@@ -226,13 +226,13 @@ TV 本阶段不做发现 tab。
 
 ### 计划
 
-- [ ] 设置「画面」增加：
+- [x] 设置「画面」增加：
   - 杜比亮度增强（默认开；说明可能过曝）
   - 杜比 DV7 转 DV8.1（默认关；说明异常可关）
-- [ ] MPV：DV 片源按开关设置 `vf` / `vd-lavc-o`（Profile 7 双层 → 8.1）；亮度增强只作用于 DV，不影响普通 HDR10
-- [ ] 设备不支持 DV 时走现有 HDR10 / SDR 回退，日志标明路径，不黑屏
+- [x] MPV：DV 片源按开关设置 `vf` / `vd-lavc-o`（Profile 7 双层 → 8.1）；亮度增强只作用于 DV，不影响普通 HDR10
+- [x] 设备不支持 DV 时走现有 HDR10 / SDR 回退，日志标明路径，不黑屏
 - [ ] K50 固定片源：SDR、HDR10、DV Profile 7、DV Profile 8；MPV vs Exo 截屏对比
-- [ ] 开关即时生效或明确「需重开当前片」，不要静默忽略
+- [x] 开关即时生效或明确「需重开当前片」，不要静默忽略
 
 jniLibs 规则仍见归档 Phase 0：整套 so、指定 tag，不跟 AAR 混装。
 

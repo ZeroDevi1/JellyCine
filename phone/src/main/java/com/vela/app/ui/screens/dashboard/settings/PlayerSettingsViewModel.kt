@@ -27,6 +27,8 @@ data class PlayerSettingsUiState(
     val mpvTargetPrim: String = PlayerPreferences.DEFAULT_MPV_TARGET_PRIM,
     val mpvTargetTrc: String = PlayerPreferences.DEFAULT_MPV_TARGET_TRC,
     val mpvOutputLevels: String = PlayerPreferences.DEFAULT_MPV_OUTPUT_LEVELS,
+    val dolbyBrightnessEnhancement: Boolean = PlayerPreferences.DEFAULT_DOLBY_BRIGHTNESS_ENHANCEMENT,
+    val dolbyDv7ToDv81: Boolean = PlayerPreferences.DEFAULT_DOLBY_DV7_TO_DV81,
 
     // Hardware Acceleration
     val hardwareDecodingEnabled: Boolean = true,
@@ -112,6 +114,8 @@ class PlayerSettingsViewModel(private val context: Context) : ViewModel() {
                 mpvTargetPrim = playerPreferences.getMpvTargetPrim(),
                 mpvTargetTrc = playerPreferences.getMpvTargetTrc(),
                 mpvOutputLevels = playerPreferences.getMpvOutputLevels(),
+                dolbyBrightnessEnhancement = playerPreferences.isDolbyBrightnessEnhancementEnabled(),
+                dolbyDv7ToDv81 = playerPreferences.isDolbyDv7ToDv81Enabled(),
                 asyncMediaCodecEnabled = playerPreferences.isAsyncMediaCodecEnabled(),
                 decoderPriority = playerPreferences.getDecoderPriority(),
                 streamingQuality = playerPreferences.getStreamingQuality(),
@@ -214,6 +218,20 @@ class PlayerSettingsViewModel(private val context: Context) : ViewModel() {
     fun setMpvHdrToSdrTonemapping(enabled: Boolean) {
         playerPreferences.setMpvHdrToSdrTonemapping(enabled)
         _uiState.value = _uiState.value.copy(mpvHdrToSdrTonemapping = enabled)
+    }
+
+    fun setDolbyBrightnessEnhancement(enabled: Boolean) {
+        playerPreferences.setDolbyBrightnessEnhancementEnabled(enabled)
+        _uiState.value = _uiState.value.copy(
+            dolbyBrightnessEnhancement = playerPreferences.isDolbyBrightnessEnhancementEnabled()
+        )
+    }
+
+    fun setDolbyDv7ToDv81(enabled: Boolean) {
+        playerPreferences.setDolbyDv7ToDv81Enabled(enabled)
+        _uiState.value = _uiState.value.copy(
+            dolbyDv7ToDv81 = playerPreferences.isDolbyDv7ToDv81Enabled()
+        )
     }
 
     fun setHardwareDecodingEnabled(enabled: Boolean) {
