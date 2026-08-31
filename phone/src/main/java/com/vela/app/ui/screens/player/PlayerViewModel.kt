@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.vela.app.playback.ActivePlayback
 import com.vela.app.player.mpv.MPVPlayer
 import com.vela.app.player.mpv.MpvPlayerController
 import com.vela.app.player.mpv.MpvWarmPool
@@ -261,6 +262,7 @@ class PlayerViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
+                ActivePlayback.setActive(true)
                 _playerState.value = _playerState.value.copy(
                     isLoading = true,
                     isPlaying = false,
@@ -577,6 +579,7 @@ class PlayerViewModel @Inject constructor(
                         mediaStreams = apiMediaStreams
                     )
                     mpvPlayer = createMpvPlayer(context).also { player ->
+                        ActivePlayback.setActive(true)
                         val strmHardwareDecoding = MPVPlayer.hardwareDecodingFor(
                             mediaSource = primaryMediaSource,
                             userPreference = playerPreferences.getMpvHardwareDecoding()
@@ -635,6 +638,7 @@ class PlayerViewModel @Inject constructor(
                     exoPlayer = PlayerUtils.createPlayer(
                         context = context
                     )
+                    ActivePlayback.setActive(true)
                     exoPlayer?.apply {
                         addListener(playerListener)
                         if (streamingMediaSource != null) {
@@ -714,6 +718,9 @@ class PlayerViewModel @Inject constructor(
 
             } catch (e: Exception) {
                 Log.e(TAG, "Player initialization failed", e)
+                if (exoPlayer == null && mpvPlayer == null) {
+                    ActivePlayback.setActive(false)
+                }
                 _playerState.value = _playerState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Unknown error occurred"
@@ -733,6 +740,7 @@ class PlayerViewModel @Inject constructor(
             try {
                 val mediaTitle = title?.takeIf { it.isNotBlank() } ?: "Trailer"
                 releasePlayer()
+                ActivePlayback.setActive(true)
                 remotePlaybackRequestKey = mediaId
                 _playerState.value = PlayerState(
                     isLoading = true,
@@ -791,6 +799,7 @@ class PlayerViewModel @Inject constructor(
                         )
                     }
                 )
+                ActivePlayback.setActive(true)
                 exoPlayer?.apply {
                     addListener(playerListener)
                     trackSelectionParameters = trackSelectionParameters
@@ -805,6 +814,9 @@ class PlayerViewModel @Inject constructor(
                 applyStartMaximizedSetting(context)
             } catch (e: Exception) {
                 Log.e(TAG, "Remote trailer initialization failed", e)
+                if (exoPlayer == null && mpvPlayer == null) {
+                    ActivePlayback.setActive(false)
+                }
                 _playerState.value = _playerState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Unable to play remote trailer",
@@ -1329,6 +1341,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun releasePlayer() {
+        ActivePlayback.setActive(false)
         releaseScrubPreview()
         persistPosition()
         playbackReporter.reportPlaybackStopped()
@@ -1502,20 +1515,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     private suspend fun createMpvPlayer(context: Context): MpvPlayerController {
-        val preferences = PlayerPreferences(context)
-        val listener = createMpvListener()
-        return MpvWarmPool.acquire(
+        return MpvWarmPool.obtain(
             context = context,
-            listener = listener
-        ) ?: withContext(Dispatchers.Main) {
-            MpvPlayerController(
-                context = context,
-                hardwareDecoding = preferences.getMpvHardwareDecoding(),
-                videoOutput = preferences.getMpvVideoOutput(),
-                audioOutput = preferences.getMpvAudioOutput(),
-                listener = listener
-            )
-        }
+            listener = createMpvListener()
+        )
     }
 
     private fun createMpvListener(): MpvPlayerController.Listener {
