@@ -200,12 +200,8 @@ fun PersonScreenContainer(
         }
     }
 
-    BackHandler {
-        if (expandedWorksType != null) {
-            expandedWorksType = null
-        } else {
-            onBackPressed()
-        }
+    BackHandler(enabled = expandedWorksType != null) {
+        expandedWorksType = null
     }
 
     val expanded = expandedWorks

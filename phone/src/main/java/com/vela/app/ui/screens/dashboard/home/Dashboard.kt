@@ -297,15 +297,15 @@ object ImagePreloader {
     private val preferredImageTypeCache = ConcurrentHashMap<String, String>()
     private val lastRenderedImageUrlCache = ConcurrentHashMap<String, String>()
     private val prefetchSemaphore = Semaphore(8)
-    private const val posterWidth = 200
-    private const val posterHeight = 300
-    private const val posterQuality = 70
-    private const val continueWatchingWidth = 480
-    private const val continueWatchingHeight = 270
-    private const val continueWatchingQuality = 80
-    private const val libraryLandscapeWidth = 480
-    private const val libraryLandscapeHeight = 270
-    private const val libraryLandscapeQuality = 80
+    private const val posterWidth = LibraryImageRequest.POSTER_WIDTH
+    private const val posterHeight = LibraryImageRequest.POSTER_HEIGHT
+    private const val posterQuality = LibraryImageRequest.POSTER_QUALITY
+    private const val continueWatchingWidth = LibraryImageRequest.LANDSCAPE_WIDTH
+    private const val continueWatchingHeight = LibraryImageRequest.LANDSCAPE_HEIGHT
+    private const val continueWatchingQuality = LibraryImageRequest.LANDSCAPE_QUALITY
+    private const val libraryLandscapeWidth = LibraryImageRequest.LANDSCAPE_WIDTH
+    private const val libraryLandscapeHeight = LibraryImageRequest.LANDSCAPE_HEIGHT
+    private const val libraryLandscapeQuality = LibraryImageRequest.LANDSCAPE_QUALITY
 
     private fun imageCacheKey(
         itemId: String,
@@ -498,7 +498,7 @@ object ImagePreloader {
                                         .networkCachePolicy(CachePolicy.ENABLED)
                                         .precision(Precision.INEXACT)
                                         .allowHardware(true)
-                                        .allowRgb565(true)
+                                        .allowRgb565(false)
                                         .crossfade(false)
                                         .build()
                                 )
@@ -769,7 +769,7 @@ fun ImageLoader(
     extraFallbackImageTypes: List<String> = emptyList(),
     preferSeriesIdForThumbBackdrop: Boolean = true,
     preferSeriesIdForEpisodePrimary: Boolean = true,
-    allowRgb565: Boolean = true,
+    allowRgb565: Boolean = false,
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
@@ -825,21 +825,11 @@ fun ImageLoader(
         }
     }
 
-    val (width, height, quality) = remember(currentImageType) {
-        when (currentImageType) {
-            "Thumb", "Backdrop" -> Triple(480, 270, 80)
-            "Banner" -> Triple(1000, 185, 85)
-            "Primary" -> {
-                if (imageType == "Thumb" || imageType == "Backdrop") {
-                    Triple(480, 270, 80)
-                } else if (imageType == "Banner") {
-                    Triple(1000, 185, 85)
-                } else {
-                    Triple(200, 300, 70)
-                }
-            }
-            else -> Triple(200, 300, 70)
-        }
+    val (width, height, quality) = remember(currentImageType, imageType) {
+        LibraryImageRequest.dimensions(
+            currentImageType = currentImageType,
+            requestedImageType = imageType
+        )
     }
     val selectedImageTag = remember(imageMetadata, actualItemId, currentImageType, imageTag) {
         imageMetadata?.imageTagFor(
@@ -2855,7 +2845,7 @@ private fun ContinueWatchingCard(
                     fallbackImageType = "Backdrop",
                     extraFallbackImageTypes = listOf("Primary"),
                     preferSeriesIdForThumbBackdrop = true,
-                    allowRgb565 = true,
+                    allowRgb565 = false,
                     contentDescription = stableItem.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

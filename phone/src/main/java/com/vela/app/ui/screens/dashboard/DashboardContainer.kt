@@ -44,8 +44,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -94,6 +92,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
+import com.vela.app.ui.navigation.NavTransitions
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -110,17 +109,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.vela.shared.ui.theme.velaMotion
 
-private fun dashboardEnterTransition(
-    effectsSpec: FiniteAnimationSpec<Float>
-): EnterTransition {
-    return fadeIn(animationSpec = effectsSpec)
-}
+private fun dashboardEnterTransition(): EnterTransition = NavTransitions.tabEnter()
 
-private fun dashboardExitTransition(
-    effectsSpec: FiniteAnimationSpec<Float>
-): ExitTransition {
-    return fadeOut(animationSpec = effectsSpec)
-}
+private fun dashboardExitTransition(): ExitTransition = NavTransitions.tabExit()
 
 sealed class DashboardDestination(
     val route: String,
@@ -182,8 +173,6 @@ fun DashboardContainer(
 ) {
     val navController = rememberNavController()
     val motion = MaterialTheme.velaMotion
-    val tabEnterEffectsSpec = motion.defaultEffectsSpec<Float>()
-    val tabExitEffectsSpec = motion.fastEffectsSpec<Float>()
     val homeScrollState = rememberLazyListState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -470,6 +459,10 @@ fun DashboardContainer(
             NavHost(
                 navController = navController,
                 startDestination = DashboardDestination.Home.route,
+                enterTransition = { dashboardEnterTransition() },
+                exitTransition = { dashboardExitTransition() },
+                popEnterTransition = { dashboardEnterTransition() },
+                popExitTransition = { dashboardExitTransition() },
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
@@ -489,8 +482,8 @@ fun DashboardContainer(
             ) {
                 composable(
                     DashboardDestination.Home.route,
-                    enterTransition = { dashboardEnterTransition(tabEnterEffectsSpec) },
-                    exitTransition = { dashboardExitTransition(tabExitEffectsSpec) }
+                    enterTransition = { dashboardEnterTransition() },
+                    exitTransition = { dashboardExitTransition() }
                 ) {
                     // Track when Home tab becomes active
                     val isHomeActive = currentRoute == DashboardDestination.Home.route
@@ -511,8 +504,8 @@ fun DashboardContainer(
                 }
                 composable(
                     DashboardDestination.MyMedia.route,
-                    enterTransition = { dashboardEnterTransition(tabEnterEffectsSpec) },
-                    exitTransition = { dashboardExitTransition(tabExitEffectsSpec) }
+                    enterTransition = { dashboardEnterTransition() },
+                    exitTransition = { dashboardExitTransition() }
                 ) {
                     ContentWrapper {
                         if (useMyMediaTabEnabled) {
@@ -535,8 +528,8 @@ fun DashboardContainer(
                 }
                 composable(
                     DashboardDestination.Search.route,
-                    enterTransition = { dashboardEnterTransition(tabEnterEffectsSpec) },
-                    exitTransition = { dashboardExitTransition(tabExitEffectsSpec) }
+                    enterTransition = { dashboardEnterTransition() },
+                    exitTransition = { dashboardExitTransition() }
                 ) {
                     ContentWrapper {
                         SearchContainer(
@@ -557,8 +550,8 @@ fun DashboardContainer(
                 }
                 composable(
                     DashboardDestination.Favorites.route,
-                    enterTransition = { dashboardEnterTransition(tabEnterEffectsSpec) },
-                    exitTransition = { dashboardExitTransition(tabExitEffectsSpec) }
+                    enterTransition = { dashboardEnterTransition() },
+                    exitTransition = { dashboardExitTransition() }
                 ) {
                     ContentWrapper {
                         Favorites(
@@ -572,8 +565,8 @@ fun DashboardContainer(
                 }
                 composable(
                     DashboardDestination.Settings.route,
-                    enterTransition = { dashboardEnterTransition(tabEnterEffectsSpec) },
-                    exitTransition = { dashboardExitTransition(tabExitEffectsSpec) }
+                    enterTransition = { dashboardEnterTransition() },
+                    exitTransition = { dashboardExitTransition() }
                 ) {
                     ContentWrapper {
                         Settings(

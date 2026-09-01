@@ -190,7 +190,7 @@ fun DownloadsScreen(
         }
     }
     BackHandler(
-        enabled = showDownloadSettings || selectedSeries != null || !embedded,
+        enabled = showDownloadSettings || selectedSeries != null,
         onBack = closeCurrentLayer
     )
 

@@ -1,23 +1,33 @@
 package com.vela.app.ui.navigation
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.material3.MaterialTheme
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.vela.app.ui.screens.dashboard.DashboardContainer
 import com.vela.app.ui.screens.dashboard.home.CachedData
 import com.vela.data.network.ServerLineSwitchReason
@@ -38,21 +48,69 @@ import com.vela.app.ui.screens.dashboard.settings.SubtitleSettingsScreen
 import com.vela.app.ui.screens.dashboard.settings.InterfaceSettingsScreen
 import com.vela.app.ui.activity.PlayerActivity
 import com.vela.app.player.mpv.MpvWarmPool
-import com.vela.shared.ui.theme.velaMotion
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 
-// 页面转场只组合主题 motion token；媒体内容保持空间稳定，避免大幅滑动造成眩晕。
-private fun contentEnterTransition(
-    effectsSpec: FiniteAnimationSpec<Float>,
-    spatialSpec: FiniteAnimationSpec<Float>
-): EnterTransition {
-    return fadeIn(animationSpec = effectsSpec) +
-        scaleIn(animationSpec = spatialSpec, initialScale = 0.985f)
+@Composable
+private fun PredictiveBackScene(
+    navController: NavController,
+    entry: NavBackStackEntry,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    content: @Composable () -> Unit
+) {
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val isCurrent = currentEntry?.id == entry.id
+    val transition = animatedVisibilityScope.transition
+    val corner by transition.animateDp(label = "nav-back-corner") { state ->
+        if (isCurrent && state == EnterExitState.PostExit) 28.dp else 0.dp
+    }
+    val elevation by transition.animateFloat(label = "nav-back-elevation") { state ->
+        if (isCurrent && state == EnterExitState.PostExit) 24f else 0f
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val radiusPx = corner.toPx()
+                clip = radiusPx > 0.5f || elevation > 0f
+                shape = RoundedCornerShape(corner)
+                shadowElevation = elevation
+            }
+    ) {
+        content()
+    }
 }
 
-private fun contentExitTransition(effectsSpec: FiniteAnimationSpec<Float>): ExitTransition {
-    return fadeOut(animationSpec = effectsSpec)
+private fun NavGraphBuilder.scene(
+    navController: NavController,
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    enterTransition: (
+        AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition
+    )? = null,
+    exitTransition: (
+        AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition
+    )? = null,
+    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit
+) {
+    composable(
+        route = route,
+        arguments = arguments,
+        enterTransition = enterTransition,
+        exitTransition = exitTransition,
+        popEnterTransition = { NavTransitions.popEnter() },
+        popExitTransition = { NavTransitions.popExit() }
+    ) { entry ->
+        val animatedScope = this
+        PredictiveBackScene(
+            navController = navController,
+            entry = entry,
+            animatedVisibilityScope = animatedScope
+        ) {
+            animatedScope.content(entry)
+        }
+    }
 }
 
 private fun NavController.enterDashboard() {
@@ -101,10 +159,6 @@ fun AppNavigation() {
     val context = LocalContext.current
     val authRepository = remember(context) { AuthRepositoryProvider.getInstance(context) }
     val mediaRepository = remember(context) { MediaRepositoryProvider.getInstance(context) }
-    val motion = MaterialTheme.velaMotion
-    val enterEffectsSpec = motion.defaultEffectsSpec<Float>()
-    val enterSpatialSpec = motion.defaultSpatialSpec<Float>()
-    val exitEffectsSpec = motion.fastEffectsSpec<Float>()
 
     LaunchedEffect(authRepository) {
         authRepository.lineSwitchEvents.collect { event ->
@@ -127,19 +181,36 @@ fun AppNavigation() {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        val currentEntry by navController.currentBackStackEntryAsState()
+        val canPopNav = currentEntry != null && navController.previousBackStackEntry != null
+        SideEffect {
+            // HyperOS 用 GestureStub 直接完成返回，NavHost 的 predictive seek 会一帧结束。
+            // 关掉 NavHost 自己吃返回，改走 popBackStack，才能播完整 popExit。
+            navController.enableOnBackPressed(false)
+        }
+        BackHandler(enabled = canPopNav) {
+            navController.popBackStack()
+        }
+
     NavHost(
         navController = navController,
         startDestination = "servers",
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        enterTransition = { NavTransitions.enter() },
+        exitTransition = { NavTransitions.exit() },
+        popEnterTransition = { NavTransitions.popEnter() },
+        popExitTransition = { NavTransitions.popExit() }
     ) {
-            composable(
+            scene(
+                navController,
                 "splash",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
+                enterTransition = { NavTransitions.enter() },
                 exitTransition = {
                     if (targetState.destination.route == "server_connection") {
                         ExitTransition.None
                     } else {
-                        contentExitTransition(exitEffectsSpec)
+                        NavTransitions.exit()
                     }
                 }
             ) {
@@ -157,20 +228,21 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "auth",
                 enterTransition = {
                     if (initialState.destination.route == "dashboard") {
                         EnterTransition.None
                     } else {
-                        contentEnterTransition(enterEffectsSpec, enterSpatialSpec)
+                        NavTransitions.enter()
                     }
                 },
                 exitTransition = {
                     if (targetState.destination.route == "server_connection") {
                         ExitTransition.None
                     } else {
-                        contentExitTransition(exitEffectsSpec)
+                        NavTransitions.exit()
                     }
                 }
             ) {
@@ -188,7 +260,8 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "server_connection",
                 enterTransition = {
                     if (
@@ -197,10 +270,10 @@ fun AppNavigation() {
                     ) {
                         EnterTransition.None
                     } else {
-                        contentEnterTransition(enterEffectsSpec, enterSpatialSpec)
+                        NavTransitions.enter()
                     }
                 },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                exitTransition = { NavTransitions.exit() }
             ) {
                 AuthScreen(
                     onAuthSuccess = {
@@ -209,7 +282,8 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "add_user?serverUrl={serverUrl}&serverName={serverName}",
                 arguments = listOf(
                     navArgument("serverUrl") {
@@ -222,8 +296,8 @@ fun AppNavigation() {
                         defaultValue = null
                     }
                 ),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val encodedServerUrl = backStackEntry.arguments?.getString("serverUrl").orEmpty()
                 val serverUrl = runCatching {
@@ -245,14 +319,15 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "dashboard",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
+                enterTransition = { NavTransitions.enter() },
                 exitTransition = {
                     if (targetState.destination.route == "auth") {
                         ExitTransition.None
                     } else {
-                        contentExitTransition(exitEffectsSpec)
+                        NavTransitions.exit()
                     }
                 }
             ) {
@@ -328,7 +403,8 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "player/{itemId}?fromStart={fromStart}",
                 arguments = listOf(
                     navArgument("itemId") { type = NavType.StringType },
@@ -337,8 +413,8 @@ fun AppNavigation() {
                         defaultValue = false
                     }
                 ),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val itemId = backStackEntry.arguments?.getString("itemId")
                 val fromStart = backStackEntry.arguments?.getBoolean("fromStart") ?: false
@@ -360,7 +436,8 @@ fun AppNavigation() {
                 }
             }
 
-            composable(
+            scene(
+                navController,
                 "detail/{itemId}?mergeVersions={mergeVersions}",
                 arguments = listOf(
                     navArgument("itemId") { type = NavType.StringType },
@@ -369,8 +446,8 @@ fun AppNavigation() {
                         defaultValue = false
                     }
                 ),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val itemId = backStackEntry.arguments?.getString("itemId")
                 val forceMergeVersions = backStackEntry.arguments?.getBoolean("mergeVersions") ?: false
@@ -408,11 +485,12 @@ fun AppNavigation() {
                 }
             }
 
-            composable(
+            scene(
+                navController,
                 "episode/{episodeId}",
                 arguments = listOf(navArgument("episodeId") { type = NavType.StringType }),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val episodeId = backStackEntry.arguments?.getString("episodeId")
 
@@ -448,11 +526,12 @@ fun AppNavigation() {
                 }
             }
 
-            composable(
+            scene(
+                navController,
                 "person/{personId}",
                 arguments = listOf(navArgument("personId") { type = NavType.StringType }),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val personId = backStackEntry.arguments?.getString("personId")
 
@@ -476,7 +555,8 @@ fun AppNavigation() {
                 }
             }
 
-            composable(
+            scene(
+                navController,
                 "viewall/{contentType}?parentId={parentId}&title={title}&genreId={genreId}&searchTerm={searchTerm}&tag={tag}",
                 arguments = listOf(
                     navArgument("contentType") { type = NavType.StringType },
@@ -505,8 +585,8 @@ fun AppNavigation() {
                         defaultValue = null
                     }
                 ),
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) { backStackEntry ->
                 val contentTypeString = backStackEntry.arguments?.getString("contentType") ?: "ALL"
                 val parentId = backStackEntry.arguments?.getString("parentId")
@@ -557,10 +637,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "player_settings",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 PlayerSettingsScreen(
                     onBackPressed = {
@@ -572,10 +653,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "subtitle_settings",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 SubtitleSettingsScreen(
                     onBackPressed = {
@@ -584,10 +666,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "downloads",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 DownloadsScreen(
                     onBackPressed = {
@@ -596,10 +679,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "interface_settings",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 InterfaceSettingsScreen(
                     onBackPressed = {
@@ -608,10 +692,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "servers",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 AppHomeContainer(
                     onServerSwitched = {
@@ -658,10 +743,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "connections_settings",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 ConnectionsSettingsScreen(
                     onBackPressed = {
@@ -673,10 +759,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "cache_settings",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 CacheSettingsScreen(
                     onBackPressed = {
@@ -685,10 +772,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "about",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 AboutScreen(
                     onBackPressed = {
@@ -697,10 +785,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
+            scene(
+                navController,
                 "server_info",
-                enterTransition = { contentEnterTransition(enterEffectsSpec, enterSpatialSpec) },
-                exitTransition = { contentExitTransition(exitEffectsSpec) }
+                enterTransition = { NavTransitions.enter() },
+                exitTransition = { NavTransitions.exit() }
             ) {
                 ServerInfoScreen(
                     onBackPressed = {
@@ -709,4 +798,5 @@ fun AppNavigation() {
                 )
             }
         }
+    }
 }

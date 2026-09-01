@@ -45,7 +45,7 @@ TV：本轮以手机为准。目录、搜索、日历、Trakt 能下沉 `data` �
 - Release 正文来自 `docs/release-notes.md` 对应版本章节（简介 + 要点），标题 `Vela v{version}`，不用 GitHub 自动 changelog
 - tag 与 `appVersionName` 不一致直接 fail；缺 `VELA_STORE_FILE_BASE64` / `VELA_STORE_PASSWORD` / `VELA_KEY_PASSWORD` 时列出缺项并拒绝 unsigned
 - 构建后 `apksigner verify`，未签名不发 Release
-- 版本在根 `build.gradle`：`appVersionName` / `appVersionCode`（当前 `1.0.3` / `3`）
+- 版本在根 `build.gradle`：`appVersionName` / `appVersionCode`（当前 `1.1.0` / `4`）
 - APK 名：`vela-phone-release-{version}-{abi}.apk`、`vela-tv-release-{version}-{abi}.apk`
 
 ### 做法

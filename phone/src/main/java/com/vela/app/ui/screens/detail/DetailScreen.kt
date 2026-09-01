@@ -562,7 +562,11 @@ fun DetailScreenContainer(
         }
     }
 
-    BackHandler {
+    val interceptSystemBack = castingDisplay ||
+        currentScreen == "season" ||
+        (currentScreen == "episode" && seasonDetailData != null)
+
+    BackHandler(enabled = interceptSystemBack) {
         handleBackNavigation()
     }
 

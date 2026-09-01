@@ -414,10 +414,8 @@ fun ViewAllScreen(
         }
     }
 
-    BackHandler {
-        if (!viewModel.popBrowseLevel(contentType, parentId, genreId)) {
-            onBackPressed()
-        }
+    BackHandler(enabled = uiState.canGoBackInFolder) {
+        viewModel.popBrowseLevel(contentType, parentId, genreId)
     }
 
     Box(
