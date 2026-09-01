@@ -1,7 +1,12 @@
 package com.vela.app.player.vr
 
+import com.vela.player.preferences.PlayerPreferences
+
 /**
- * GPU flatten options for mpv GLSL / libplacebo hooks.
+ * GPU flatten shader for mpv `vo=gpu` / `vo=gpu-next` hooks.
+ *
+ * `//!PARAM` / `glsl-shader-opts` only work on gpu-next. Default vo is gpu,
+ * so values are baked as `#define`s and the hook is reloaded.
  */
 object VrFlattenFilter {
     const val SHADER_ASSET = "shaders/vr_flatten.glsl"
@@ -10,15 +15,30 @@ object VrFlattenFilter {
     const val MIN_OUTPUT_FOV = 40f
     const val MAX_OUTPUT_FOV = 120f
 
-    fun shaderOpts(
+    fun shaderSource(
+        template: String,
         layout: VrLayout,
         yaw: Float = 0f,
         pitch: Float = 0f,
         outputFov: Float = DEFAULT_OUTPUT_FOV
     ): String {
         val fov = outputFov.coerceIn(MIN_OUTPUT_FOV, MAX_OUTPUT_FOV)
-        return "yaw=${format(yaw)},pitch=${format(pitch)},d_fov=${format(fov)}," +
-            "id_fov=${layout.inputFov},proj_mode=${layout.projMode},stereo_mode=${layout.stereoMode}"
+        return template
+            .replace("__YAW__", format(yaw))
+            .replace("__PITCH__", format(pitch))
+            .replace("__D_FOV__", format(fov))
+            .replace("__ID_FOV__", "${layout.inputFov}.0")
+            .replace("__PROJ_MODE__", "${layout.projMode}.0")
+            .replace("__STEREO_MODE__", "${layout.stereoMode}.0")
+    }
+
+    fun copyHwdec(current: String): String? {
+        return when (current) {
+            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
+            "auto",
+            "yes" -> PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY
+            else -> null
+        }
     }
 
     private fun format(value: Float): String {

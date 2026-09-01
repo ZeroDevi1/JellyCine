@@ -1082,7 +1082,7 @@ class PlayerViewModel @Inject constructor(
         val layout = detectedVrLayout ?: return
         vrYaw = (vrYaw + deltaYaw).coerceIn(-layout.yawLimit, layout.yawLimit)
         vrPitch = (vrPitch + deltaPitch).coerceIn(-85f, 85f)
-        mpvPlayer?.setVrLook(VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov))
+        mpvPlayer?.setVrLook(layout, vrYaw, vrPitch, vrOutputFov)
     }
 
     fun applyVrFovScale(scaleFactor: Float) {
@@ -1093,14 +1093,12 @@ class PlayerViewModel @Inject constructor(
             VrFlattenFilter.MIN_OUTPUT_FOV,
             VrFlattenFilter.MAX_OUTPUT_FOV
         )
-        mpvPlayer?.setVrLook(VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov))
+        mpvPlayer?.setVrLook(layout, vrYaw, vrPitch, vrOutputFov)
     }
 
     private fun enableVrFlatPlayback(layout: VrLayout) {
         resetVrLook()
-        mpvPlayer?.setVrFlattenShader(
-            VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov)
-        )
+        mpvPlayer?.setVrFlattenShader(layout, vrYaw, vrPitch, vrOutputFov)
         _playerState.value = _playerState.value.copy(
             vrDetected = true,
             vrFlatEnabled = true,

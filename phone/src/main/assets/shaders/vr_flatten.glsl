@@ -1,45 +1,22 @@
 //!HOOK MAIN
 //!BIND HOOKED
 //!DESC VR flatten to rectilinear 2D
+//!WIDTH OUTPUT.w OUTPUT.h * 0 > OUTPUT.w HOOKED.w ?
+//!HEIGHT OUTPUT.w OUTPUT.h * 0 > OUTPUT.h HOOKED.h ?
 
-//!PARAM yaw
-//!TYPE float
-//!MINIMUM -180
-//!MAXIMUM 180
-0.0
-
-//!PARAM pitch
-//!TYPE float
-//!MINIMUM -90
-//!MAXIMUM 90
-0.0
-
-//!PARAM d_fov
-//!TYPE float
-//!MINIMUM 40
-//!MAXIMUM 120
-90.0
-
-//!PARAM id_fov
-//!TYPE float
-//!MINIMUM 80
-//!MAXIMUM 360
-180.0
-
-//!PARAM proj_mode
-//!TYPE float
-0.0
-
-//!PARAM stereo_mode
-//!TYPE float
-1.0
+#define YAW __YAW__
+#define PITCH __PITCH__
+#define D_FOV __D_FOV__
+#define ID_FOV __ID_FOV__
+#define PROJ_MODE __PROJ_MODE__
+#define STEREO_MODE __STEREO_MODE__
 
 #define PI 3.14159265359
 
 vec2 stereoUv(vec2 uv) {
-    if (stereo_mode > 1.5) {
+    if (STEREO_MODE > 1.5) {
         uv.y = uv.y * 0.5;
-    } else if (stereo_mode > 0.5) {
+    } else if (STEREO_MODE > 0.5) {
         uv.x = uv.x * 0.5;
     }
     return uv;
@@ -62,22 +39,22 @@ vec2 dirToFisheye(vec3 dir, float srcFov) {
 
 vec4 hook() {
     vec2 ndc = HOOKED_pos * 2.0 - 1.0;
-    ndc.x *= HOOKED_size.x / max(HOOKED_size.y, 1.0);
-    float tanHalf = tan(radians(d_fov) * 0.5);
+    ndc.x *= target_size.x / max(target_size.y, 1.0);
+    float tanHalf = tan(radians(D_FOV) * 0.5);
     vec3 dir = normalize(vec3(ndc.x * tanHalf, ndc.y * tanHalf, 1.0));
 
-    float cy = cos(radians(yaw));
-    float sy = sin(radians(yaw));
-    float cp = cos(radians(pitch));
-    float sp = sin(radians(pitch));
+    float cy = cos(radians(YAW));
+    float sy = sin(radians(YAW));
+    float cp = cos(radians(PITCH));
+    float sp = sin(radians(PITCH));
     vec3 pitched = vec3(dir.x, dir.y * cp - dir.z * sp, dir.y * sp + dir.z * cp);
     vec3 look = vec3(pitched.x * cy + pitched.z * sy, pitched.y, -pitched.x * sy + pitched.z * cy);
 
     vec2 uv;
-    if (proj_mode > 1.5) {
-        uv = dirToFisheye(look, id_fov);
+    if (PROJ_MODE > 1.5) {
+        uv = dirToFisheye(look, ID_FOV);
     } else {
-        float srcFov = proj_mode > 0.5 ? 360.0 : max(id_fov, 1.0);
+        float srcFov = PROJ_MODE > 0.5 ? 360.0 : max(ID_FOV, 1.0);
         uv = dirToEquirect(look, srcFov);
     }
 

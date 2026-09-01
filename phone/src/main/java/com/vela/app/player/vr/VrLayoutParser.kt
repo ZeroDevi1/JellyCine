@@ -12,6 +12,9 @@ object VrLayoutParser {
     private val FISHEYE_220 = Regex("""(?:^|[_\-. ])(?:mkx220|fisheye220|f220)(?:$|[_\-. ])""")
     private val FISHEYE_200 = Regex("""(?:^|[_\-. ])(?:mkx200|fisheye200|f200|rf70)(?:$|[_\-. ])""")
     private val FISHEYE_190 = Regex("""(?:^|[_\-. ])(?:fisheye190|f190|fisheye|rf52)(?:$|[_\-. ])""")
+    private val JAV_VR_STUDIO = Regex(
+        """(?:^|[_\-. \[【])(?:crvr|kavr|sivr|ipvr|savr|hnvr|pxvr|kmvr|mdvr)[-_]?\d"""
+    )
     private val HALF_EQUIRECT = Regex(
         """(?:^|[_\-. ])(?:vr180|180x180|hequirect)(?:$|[_\-. ])|[_\-.]180[_\-. ]"""
     )
@@ -138,6 +141,7 @@ object VrLayoutParser {
             FISHEYE_220.containsMatchIn(text) -> VrProjection.Fisheye to 220
             FISHEYE_200.containsMatchIn(text) -> VrProjection.Fisheye to 200
             FISHEYE_190.containsMatchIn(text) -> VrProjection.Fisheye to 190
+            JAV_VR_STUDIO.containsMatchIn(text) -> VrProjection.Fisheye to 180
             HALF_EQUIRECT.containsMatchIn(text) -> VrProjection.HalfEquirect to 180
             EQUIRECT.containsMatchIn(text) -> VrProjection.Equirect to 360
             else -> null

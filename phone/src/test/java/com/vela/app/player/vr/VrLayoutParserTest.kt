@@ -114,4 +114,12 @@ class VrLayoutParserTest {
         )
         assertEquals(layout, VrLayoutParser.layoutForId(layout.id))
     }
+
+    @Test
+    fun parsesCrvrTitleAsFisheye() {
+        val layout = VrLayoutParser.parse(itemName = "CRVR-146 【VR】深田えいみ")
+        assertEquals(VrProjection.Fisheye, layout?.projection)
+        assertEquals(VrStereo.SideBySide, layout?.stereo)
+        assertEquals(180, layout?.inputFov)
+    }
 }

@@ -2,11 +2,14 @@ package com.vela.app.player.mpv
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.system.Os
 import android.util.Log
 import android.view.Surface
 import androidx.media3.common.util.UnstableApi
 import com.vela.app.player.vr.VrFlattenFilter
+import com.vela.app.player.vr.VrLayout
 import com.vela.player.core.PlayerUtils
 import com.vela.player.preferences.PlayerPreferences
 import com.vela.player.video.HdrCapabilityManager
@@ -28,6 +31,7 @@ class MpvPlayerController(
         private const val SUBTITLE_LOG_TAG = "JellyCine-Sub"
         private const val DOLBY_LOG_TAG = "MpvDolby"
         private const val VR_LOG_TAG = "JellyCine-VR"
+        private const val VR_LOOK_RELOAD_MS = 32L
     }
 
     interface Listener {
@@ -56,6 +60,20 @@ class MpvPlayerController(
     private val playerPreferences = PlayerPreferences(context.applicationContext)
     private var lastDolbyRuntimePath: String? = null
     private var vrShaderActive = false
+    private var hwdecBeforeVr: String? = null
+    private var lastVrShaderSource: String? = null
+    private val vrLookHandler = Handler(Looper.getMainLooper())
+    private val applyPendingVrLook = Runnable {
+        pendingVrLookSource?.let { reloadVrShader(it) }
+    }
+    private var pendingVrLookSource: String? = null
+    private val vrShaderTemplate: String? by lazy {
+        runCatching {
+            appContext.assets.open(VrFlattenFilter.SHADER_ASSET).bufferedReader().use { it.readText() }
+        }.onFailure { error ->
+            Log.e(VR_LOG_TAG, "failed to read VR flatten shader", error)
+        }.getOrNull()
+    }
     @Volatile
     private var listener: Listener = listener
 
@@ -262,43 +280,98 @@ class MpvPlayerController(
         }
     }
 
-    fun setVrFlattenShader(opts: String?) {
+    fun setVrFlattenShader(
+        layout: VrLayout?,
+        yaw: Float = 0f,
+        pitch: Float = 0f,
+        outputFov: Float = VrFlattenFilter.DEFAULT_OUTPUT_FOV
+    ) {
         if (released) return
-        if (opts.isNullOrBlank()) {
+        vrLookHandler.removeCallbacks(applyPendingVrLook)
+        pendingVrLookSource = null
+        if (layout == null) {
             clearVrFlattenShader()
             return
         }
-        val shader = installVrFlattenShader() ?: return
+        val source = vrShaderSource(layout, yaw, pitch, outputFov) ?: return
+        enableVrCopyHwdec()
         vrShaderActive = true
-        setMpv("glsl-shaders", shader.absolutePath)
-        setMpv("glsl-shader-opts", opts)
-        Log.i(VR_LOG_TAG, "glsl hook=${shader.name} opts=$opts")
+        reloadVrShader(source)
     }
 
-    fun setVrLook(opts: String) {
+    fun setVrLook(
+        layout: VrLayout,
+        yaw: Float,
+        pitch: Float,
+        outputFov: Float
+    ) {
         if (released || !vrShaderActive) return
-        setMpv("glsl-shader-opts", opts)
+        val source = vrShaderSource(layout, yaw, pitch, outputFov) ?: return
+        pendingVrLookSource = source
+        vrLookHandler.removeCallbacks(applyPendingVrLook)
+        vrLookHandler.postDelayed(applyPendingVrLook, VR_LOOK_RELOAD_MS)
     }
 
     private fun clearVrFlattenShader() {
+        vrLookHandler.removeCallbacks(applyPendingVrLook)
+        pendingVrLookSource = null
+        lastVrShaderSource = null
         vrShaderActive = false
         if (!released) {
-            setMpv("glsl-shaders", "")
+            MPVLib.command(arrayOf("change-list", "glsl-shaders", "clr", ""))
             setMpv("glsl-shader-opts", "")
+            restoreVrHwdec()
         }
     }
 
-    private fun installVrFlattenShader(): File? {
+    private fun vrShaderSource(
+        layout: VrLayout,
+        yaw: Float,
+        pitch: Float,
+        outputFov: Float
+    ): String? {
+        val template = vrShaderTemplate ?: return null
+        return VrFlattenFilter.shaderSource(template, layout, yaw, pitch, outputFov)
+    }
+
+    private fun reloadVrShader(source: String) {
+        if (released || source == lastVrShaderSource) return
+        val shader = writeVrShader(source) ?: return
+        lastVrShaderSource = source
+        MPVLib.command(arrayOf("change-list", "glsl-shaders", "set", shader.absolutePath))
+        Log.i(
+            VR_LOG_TAG,
+            "glsl hook=${shader.name} hwdec=${MPVLib.getPropertyString("hwdec")} " +
+                "shaders=${MPVLib.getPropertyString("glsl-shaders")}"
+        )
+    }
+
+    private fun writeVrShader(source: String): File? {
         val dest = appContext.filesDir.resolve("mpv-shaders").apply { mkdirs() }
             .resolve(VrFlattenFilter.SHADER_FILE_NAME)
         return runCatching {
-            appContext.assets.open(VrFlattenFilter.SHADER_ASSET).use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            }
+            dest.writeText(source)
             dest
         }.onFailure { error ->
-            Log.e(VR_LOG_TAG, "failed to install VR flatten shader", error)
+            Log.e(VR_LOG_TAG, "failed to write VR flatten shader", error)
         }.getOrNull()
+    }
+
+    private fun enableVrCopyHwdec() {
+        if (hwdecBeforeVr != null) return
+        val current = MPVLib.getPropertyString("hwdec") ?: hardwareDecoding
+        val copy = VrFlattenFilter.copyHwdec(current) ?: return
+        hwdecBeforeVr = current
+        MPVLib.setPropertyString("hwdec", copy)
+        Log.i(VR_LOG_TAG, "hwdec $current -> $copy for GLSL flatten")
+    }
+
+    private fun restoreVrHwdec() {
+        val previous = hwdecBeforeVr ?: return
+        hwdecBeforeVr = null
+        if (!released) {
+            MPVLib.setPropertyString("hwdec", previous)
+        }
     }
 
     fun setVolume(volume: Float) {
@@ -340,6 +413,7 @@ class MpvPlayerController(
     fun release() {
         if (released) return
         released = true
+        vrLookHandler.removeCallbacks(applyPendingVrLook)
         MpvWarmPool.notifyReleased(this)
         runCatching { MPVLib.removeObserver(this) }
         runCatching { MPVLib.detachSurface() }
