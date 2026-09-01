@@ -24,6 +24,9 @@ import com.vela.app.playback.ActivePlayback
 import com.vela.app.player.mpv.MPVPlayer
 import com.vela.app.player.mpv.MpvPlayerController
 import com.vela.app.player.mpv.MpvWarmPool
+import com.vela.app.player.vr.VrFlattenFilter
+import com.vela.app.player.vr.VrLayout
+import com.vela.app.player.vr.VrLayoutParser
 import com.vela.data.model.AudioTranscodeMode
 import com.vela.data.model.BaseItemDto
 import com.vela.data.model.MediaSource
@@ -137,6 +140,10 @@ class PlayerViewModel @Inject constructor(
     private var playbackSpeed = 1f
     private var speedBeforeHold = 1f
     private var lastHardwareDecoding = PlayerPreferences.DEFAULT_MPV_HARDWARE_DECODING
+    private var detectedVrLayout: VrLayout? = null
+    private var vrYaw = 0f
+    private var vrPitch = 0f
+    private var vrOutputFov = VrFlattenFilter.DEFAULT_OUTPUT_FOV
     private val scrubPreviewRequests = Channel<ScrubPreviewRequest>(Channel.CONFLATED)
     private val scrubPreviewRetrieverLock = Any()
     private var scrubPreviewSource: ScrubPreviewSource? = null
@@ -286,6 +293,7 @@ class PlayerViewModel @Inject constructor(
                 hasHandledPlaybackCompletion = false
                 remotePlaybackRequestKey = null
                 requestedMediaSourceId = mediaSourceId?.takeIf { it.isNotBlank() }
+                resetVrPlayback()
                 val playerPreferences = PlayerPreferences(context)
                 activePlayerEngine = forcedPlayerEngine ?: playerPreferences.getPlayerEngine()
                 val resolvedPreferredAudioStreamIndex = preferredAudioStreamIndex
@@ -681,6 +689,15 @@ class PlayerViewModel @Inject constructor(
                     mediaSource = primaryMediaSource,
                     userPreference = userHardwareDecoding
                 )
+                val vrLayout = VrLayoutParser.parse(
+                    mediaSourcePath = primaryMediaSource?.path,
+                    itemPath = itemDetails?.path,
+                    itemName = itemDetails?.name,
+                    mediaSourceName = primaryMediaSource?.name,
+                    tags = itemDetails?.tags,
+                    video3DFormat = itemDetails?.video3DFormat
+                )
+                detectedVrLayout = vrLayout
                 _playerState.value = _playerState.value.copy(
                     isLoading = true,
                     isPlaying = false,
@@ -701,7 +718,10 @@ class PlayerViewModel @Inject constructor(
                     isHdrEnabled = isHdrPlayback,
                     hdrFormat = hdrFormat,
                     playbackSpeed = 1f,
-                    hardwareDecoding = hardwareDecoding
+                    hardwareDecoding = hardwareDecoding,
+                    vrDetected = vrLayout != null,
+                    vrFlatEnabled = false,
+                    vrProjectionId = vrLayout?.id
                 )
                 if (usesMpv) {
                     updateApiTrackInformation()
@@ -1034,6 +1054,80 @@ class PlayerViewModel @Inject constructor(
         preferences.setMpvHardwareDecoding(next)
         mpvPlayer?.setHardwareDecoding(next)
         _playerState.value = _playerState.value.copy(hardwareDecoding = next)
+    }
+
+    fun toggleVrFlatPlayback() {
+        val layout = detectedVrLayout ?: return
+        if (_playerState.value.vrFlatEnabled) {
+            disableVrFlatPlayback()
+        } else {
+            enableVrFlatPlayback(layout)
+        }
+    }
+
+    fun selectVrProjection(id: String) {
+        val layout = VrLayoutParser.layoutForId(id) ?: return
+        detectedVrLayout = layout
+        _playerState.value = _playerState.value.copy(
+            vrDetected = true,
+            vrProjectionId = layout.id
+        )
+        if (_playerState.value.vrFlatEnabled) {
+            enableVrFlatPlayback(layout)
+        }
+    }
+
+    fun applyVrLookDelta(deltaYaw: Float, deltaPitch: Float) {
+        if (!_playerState.value.vrFlatEnabled) return
+        val layout = detectedVrLayout ?: return
+        vrYaw = (vrYaw + deltaYaw).coerceIn(-layout.yawLimit, layout.yawLimit)
+        vrPitch = (vrPitch + deltaPitch).coerceIn(-85f, 85f)
+        mpvPlayer?.setVrLook(VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov))
+    }
+
+    fun applyVrFovScale(scaleFactor: Float) {
+        if (!_playerState.value.vrFlatEnabled) return
+        val layout = detectedVrLayout ?: return
+        if (scaleFactor <= 0f) return
+        vrOutputFov = (vrOutputFov / scaleFactor).coerceIn(
+            VrFlattenFilter.MIN_OUTPUT_FOV,
+            VrFlattenFilter.MAX_OUTPUT_FOV
+        )
+        mpvPlayer?.setVrLook(VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov))
+    }
+
+    private fun enableVrFlatPlayback(layout: VrLayout) {
+        resetVrLook()
+        mpvPlayer?.setVrFlattenShader(
+            VrFlattenFilter.shaderOpts(layout, vrYaw, vrPitch, vrOutputFov)
+        )
+        _playerState.value = _playerState.value.copy(
+            vrDetected = true,
+            vrFlatEnabled = true,
+            vrProjectionId = layout.id
+        )
+    }
+
+    private fun disableVrFlatPlayback() {
+        mpvPlayer?.setVrFlattenShader(null)
+        resetVrLook()
+        _playerState.value = _playerState.value.copy(vrFlatEnabled = false)
+    }
+
+    private fun resetVrPlayback() {
+        detectedVrLayout = null
+        resetVrLook()
+        _playerState.value = _playerState.value.copy(
+            vrDetected = false,
+            vrFlatEnabled = false,
+            vrProjectionId = null
+        )
+    }
+
+    private fun resetVrLook() {
+        vrYaw = 0f
+        vrPitch = 0f
+        vrOutputFov = VrFlattenFilter.DEFAULT_OUTPUT_FOV
     }
 
     fun beginHoldSpeed(speed: Float) {

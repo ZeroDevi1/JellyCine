@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import android.content.Context
 import android.media.AudioManager
 import android.provider.Settings
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +42,7 @@ import com.vela.app.ui.player.applyPlayerPipParams
 import com.vela.app.ui.player.enterPlayerPip
 import com.vela.app.ui.player.findActivity
 import com.vela.app.ui.screens.player.PlayerViewModel
+import com.vela.app.player.vr.VrLayoutParser
 import com.vela.data.model.AudioTranscodeMode
 import com.vela.data.model.BaseItemDto
 import com.vela.data.repository.MediaRepositoryProvider
@@ -138,6 +140,7 @@ fun PlayerScreen(
     var showAudioTranscodingDialog by remember { mutableStateOf(false) }
     var pendingStreamingQualitySelection by remember { mutableStateOf<String?>(null) }
     var showMediaInfo by remember { mutableStateOf(false) }
+    var showVrProjectionDialog by remember { mutableStateOf(false) }
     val mediaInfoSnapshot = remember(showMediaInfo, viewModel) {
         if (showMediaInfo) viewModel.getMediaMetadataInfo() else null
     }
@@ -257,6 +260,7 @@ fun PlayerScreen(
         showStreamingQualityDialog = showStreamingQualityDialog,
         showAudioTranscodingDialog = showAudioTranscodingDialog,
         showMediaInfo = showMediaInfo,
+        showVrProjectionDialog = showVrProjectionDialog,
         autoHideKey = autoHideKey,
         isScrubbing = isScrubbing,
         hideSystemBars = hideSystemBars,
@@ -495,6 +499,7 @@ fun PlayerScreen(
 
     val isPortraitPlayback = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
     var hideVideoForRotation by remember { mutableStateOf(false) }
+    var vrSphericalView by remember { mutableStateOf<View?>(null) }
     var seenPortraitPlayback by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(isPortraitPlayback, miniLayout) {
         if (miniLayout) return@LaunchedEffect
@@ -575,6 +580,9 @@ fun PlayerScreen(
             onSurfaceReady = { hideVideoForRotation = false },
             snapTransform = hideVideoForRotation,
             subtitleAppearanceEpoch = viewModel.subtitleAppearanceEpoch,
+            vrFlatEnabled = playerState.vrFlatEnabled,
+            vrLayout = playerState.vrProjectionId?.let(VrLayoutParser::layoutForId),
+            onSphericalTouchTarget = { vrSphericalView = it },
             modifier = Modifier.fillMaxSize()
         )
         }
@@ -656,7 +664,17 @@ fun PlayerScreen(
                     viewModel.endHoldSpeed()
                     uiState = uiState.copy(holdSpeedLabel = null)
                 }
-            }
+            },
+            vrLookAround = playerState.vrFlatEnabled,
+            onLookAround = { deltaYaw, deltaPitch ->
+                viewModel.applyVrLookDelta(deltaYaw, deltaPitch)
+            },
+            onFovScale = { scaleFactor ->
+                if (viewModel.mpvPlayer != null) {
+                    viewModel.applyVrFovScale(scaleFactor)
+                }
+            },
+            getVrSurface = { vrSphericalView }
         )
         }
 
@@ -735,6 +753,7 @@ fun PlayerScreen(
                 onEnterPip?.invoke()
             },
             onShowChapters = { showChaptersSheet = true },
+            onShowVrProjection = { showVrProjectionDialog = true },
             onBackgroundClick = {
                 uiState = uiState.copy(controlsVisible = false)
             },
@@ -807,7 +826,14 @@ fun PlayerScreen(
                 pendingStreamingQualitySelection = null
                 showAudioTranscodingDialog = false
             },
-            onDismissMediaInfo = { showMediaInfo = false }
+            onDismissMediaInfo = { showMediaInfo = false },
+            showVrProjectionDialog = showVrProjectionDialog,
+            currentVrProjectionId = playerState.vrProjectionId,
+            onVrProjectionSelected = { id ->
+                viewModel.selectVrProjection(id)
+                showVrProjectionDialog = false
+            },
+            onDismissVrProjectionDialog = { showVrProjectionDialog = false }
         )
 
         if (showSubtitleStyleSheet) {

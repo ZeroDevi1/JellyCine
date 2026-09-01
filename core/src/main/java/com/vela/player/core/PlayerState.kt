@@ -59,7 +59,10 @@ data class PlayerState(
     val videoScale: Float = 1f,
     val videoOffsetX: Float = 0f,
     val videoOffsetY: Float = 0f,
-    val aspectRatioMode: String = "Fit"
+    val aspectRatioMode: String = "Fit",
+    val vrDetected: Boolean = false,
+    val vrFlatEnabled: Boolean = false,
+    val vrProjectionId: String? = null
 )
 
 data class ChapterMarker(

@@ -34,7 +34,11 @@ class GestureHelper(
     private val getPlaybackPosition: () -> Long = { 0L },
     private val getPlaybackDuration: () -> Long = { 0L },
     private val onSeekPreview: (Long?) -> Unit = {},
-    private val onHoldSpeed: (Boolean) -> Unit = {}
+    private val onHoldSpeed: (Boolean) -> Unit = {},
+    private val isVrLookAround: () -> Boolean = { false },
+    private val onLookAround: (Float, Float) -> Unit = { _, _ -> },
+    private val onFovScale: (Float) -> Unit = {},
+    private val getVrSurface: () -> View? = { null }
 ) {
     private val playerPreferences = PlayerPreferences(context)
     // Gesture state tracking
@@ -44,6 +48,8 @@ class GestureHelper(
     private var swipeGestureVolumeOpen = false
     private var swipeGestureBrightnessOpen = false
     private var swipeGestureProgressOpen = false
+    private var swipeGestureLookOpen = false
+    private var vrSurfaceLookStarted = false
     private var lastScaleEvent: Long = 0
     private var currentNumberOfPointers: Int = 0
     private var isZoomEnabled = false
@@ -126,6 +132,27 @@ class GestureHelper(
                 }
                 if (inExclusionArea(firstEvent)) return false
 
+                if (isVrLookAround()) {
+                    if (speedHoldActive || (SystemClock.elapsedRealtime() - lastScaleEvent) <= 200) {
+                        return false
+                    }
+                    if (inVolumeBrightnessEdge(firstEvent) && abs(distanceY) >= abs(distanceX)) {
+                        return false
+                    }
+                    swipeGestureLookOpen = true
+                    val surface = getVrSurface()
+                    if (surface != null) {
+                        dispatchVrSurfaceLook(surface, firstEvent, currentEvent)
+                        return true
+                    }
+                    val width = touchView.measuredWidth.coerceAtLeast(1)
+                    val height = touchView.measuredHeight.coerceAtLeast(1)
+                    val deltaYaw = -distanceX / width.toFloat() * 90f
+                    val deltaPitch = distanceY / height.toFloat() * 60f
+                    onLookAround(deltaYaw, deltaPitch)
+                    return true
+                }
+
                 // Check if swipe is horizontal
                 if (abs(distanceX) > abs(distanceY)) {
                     return if ((abs(currentEvent.x - firstEvent.x) > 50 || swipeGestureProgressOpen) &&
@@ -172,6 +199,9 @@ class GestureHelper(
                 if (inExclusionArea(firstEvent)) {
                     return false
                 }
+                if (isVrLookAround() && !inVolumeBrightnessEdge(firstEvent)) {
+                    return false
+                }
                 if (!playerPreferences.arePlayerGesturesEnabled() ||
                     !playerPreferences.isVolumeBrightnessGesturesEnabled()
                 ) {
@@ -181,7 +211,7 @@ class GestureHelper(
                 if (abs(distanceY) < abs(distanceX)) {
                     return false
                 }
-                if (swipeGestureProgressOpen) {
+                if (swipeGestureProgressOpen || swipeGestureLookOpen) {
                     return false
                 }
 
@@ -225,17 +255,22 @@ class GestureHelper(
         object : ScaleGestureDetector.OnScaleGestureListener {
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
                 return playerPreferences.arePlayerGesturesEnabled() &&
-                    playerPreferences.isZoomGestureEnabled()
+                    (isVrLookAround() || playerPreferences.isZoomGestureEnabled())
             }
 
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                if (!playerPreferences.arePlayerGesturesEnabled() ||
-                    !playerPreferences.isZoomGestureEnabled()
-                ) {
+                if (!playerPreferences.arePlayerGesturesEnabled()) {
                     return false
                 }
                 lastScaleEvent = SystemClock.elapsedRealtime()
                 val scaleFactor = detector.scaleFactor
+                if (isVrLookAround()) {
+                    onFovScale(scaleFactor)
+                    return true
+                }
+                if (!playerPreferences.isZoomGestureEnabled()) {
+                    return false
+                }
                 
                 if (abs(scaleFactor - ZOOM_SCALE_BASE) > ZOOM_SCALE_THRESHOLD) {
                     val enableZoom = scaleFactor > 1
@@ -276,6 +311,11 @@ class GestureHelper(
                 onSeekPreview(null)
             }
 
+            if (swipeGestureLookOpen) {
+                finishVrSurfaceLook(event)
+                swipeGestureLookOpen = false
+            }
+
             if (speedHoldActive) {
                 speedHoldActive = false
                 onHoldSpeed(false)
@@ -297,6 +337,50 @@ class GestureHelper(
         return inExclusion
     }
 
+    private fun dispatchVrSurfaceLook(
+        surface: View,
+        firstEvent: MotionEvent,
+        currentEvent: MotionEvent
+    ) {
+        if (!vrSurfaceLookStarted) {
+            dispatchToVrSurface(surface, firstEvent)
+            vrSurfaceLookStarted = true
+        }
+        dispatchToVrSurface(surface, currentEvent)
+    }
+
+    private fun finishVrSurfaceLook(event: MotionEvent) {
+        val surface = getVrSurface()
+        if (vrSurfaceLookStarted && surface != null) {
+            dispatchToVrSurface(surface, event)
+        }
+        vrSurfaceLookStarted = false
+    }
+
+    private fun dispatchToVrSurface(surface: View, event: MotionEvent): Boolean {
+        val viewLoc = IntArray(2)
+        val surfaceLoc = IntArray(2)
+        touchView.getLocationOnScreen(viewLoc)
+        surface.getLocationOnScreen(surfaceLoc)
+        val transformed = MotionEvent.obtain(event)
+        transformed.offsetLocation(
+            (viewLoc[0] - surfaceLoc[0]).toFloat(),
+            (viewLoc[1] - surfaceLoc[1]).toFloat()
+        )
+        return try {
+            surface.dispatchTouchEvent(transformed)
+        } finally {
+            transformed.recycle()
+        }
+    }
+
+    private fun inVolumeBrightnessEdge(firstEvent: MotionEvent): Boolean {
+        val width = touchView.measuredWidth
+        if (width <= 0) return false
+        val edge = width * 0.18f
+        return firstEvent.x < edge || firstEvent.x > width - edge
+    }
+
     fun handleTouchEvent(event: MotionEvent): Boolean {
         currentNumberOfPointers = event.pointerCount
 
@@ -313,7 +397,7 @@ class GestureHelper(
             }
             2 -> {
                 if (playerPreferences.arePlayerGesturesEnabled() &&
-                    playerPreferences.isZoomGestureEnabled()
+                    (isVrLookAround() || playerPreferences.isZoomGestureEnabled())
                 ) {
                     zoomGestureDetector.onTouchEvent(event)
                 }

@@ -115,7 +115,11 @@ fun ControlsOverlay(
     onUserInteraction: () -> Unit = {},
     onBackgroundClick: () -> Unit = {},
     skipActionLabel: String? = null,
-    onSkipAction: () -> Unit = {}
+    onSkipAction: () -> Unit = {},
+    vrDetected: Boolean = false,
+    vrFlatEnabled: Boolean = false,
+    onToggleVrFlat: () -> Unit = {},
+    onShowVrProjection: () -> Unit = {}
 ) {
     val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
     val context = LocalContext.current
@@ -212,6 +216,10 @@ fun ControlsOverlay(
             landscape = !isPortrait,
             skipActionLabel = skipActionLabel,
             onSkipAction = onSkipAction,
+            vrDetected = vrDetected,
+            vrFlatEnabled = vrFlatEnabled,
+            onToggleVrFlat = onToggleVrFlat,
+            onShowVrProjection = onShowVrProjection,
             modifier = modifier
         )
 }
@@ -266,6 +274,10 @@ private fun PortraitPlayerOverlay(
     landscape: Boolean = false,
     skipActionLabel: String? = null,
     onSkipAction: () -> Unit = {},
+    vrDetected: Boolean = false,
+    vrFlatEnabled: Boolean = false,
+    onToggleVrFlat: () -> Unit = {},
+    onShowVrProjection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showOverflow by remember { mutableStateOf(false) }
@@ -668,6 +680,33 @@ private fun PortraitPlayerOverlay(
                             )
                         } else {
                             Spacer(modifier = Modifier.weight(1f))
+                        }
+                        if (vrDetected) {
+                            PlayerChromeIconButton(
+                                onClick = onToggleVrFlat,
+                                onLongClick = onShowVrProjection,
+                                modifier = Modifier
+                                    .height(PlayerChromeIconSize)
+                                    .widthIn(min = 48.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (vrFlatEnabled) {
+                                            R.string.player_vr_chip_on
+                                        } else {
+                                            R.string.player_vr_chip_enable
+                                        }
+                                    ),
+                                    color = if (vrFlatEnabled) {
+                                        Color(0xFFB794F4)
+                                    } else {
+                                        Color.White
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
                         }
                         if (showPlaybackSettingsButton) {
                             PlayerChromeIconButton(onClick = onShowPlaybackSettings) {

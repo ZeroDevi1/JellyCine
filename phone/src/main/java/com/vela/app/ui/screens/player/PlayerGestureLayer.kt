@@ -24,6 +24,10 @@ private class GestureLayerCallbacks {
     var getPlaybackDuration: () -> Long = { 0L }
     var onSeekPreview: (Long?) -> Unit = {}
     var onHoldSpeed: (Boolean) -> Unit = {}
+    var vrLookAround: Boolean = false
+    var onLookAround: (Float, Float) -> Unit = { _, _ -> }
+    var onFovScale: (Float) -> Unit = {}
+    var getVrSurface: () -> View? = { null }
 }
 
 @SuppressLint("ClickableViewAccessibility")
@@ -44,6 +48,10 @@ fun PlayerGestureLayer(
     getPlaybackDuration: () -> Long = { 0L },
     onSeekPreview: (Long?) -> Unit = {},
     onHoldSpeed: (Boolean) -> Unit = {},
+    vrLookAround: Boolean = false,
+    onLookAround: (Float, Float) -> Unit = { _, _ -> },
+    onFovScale: (Float) -> Unit = {},
+    getVrSurface: () -> View? = { null },
     modifier: Modifier = Modifier
 ) {
     AndroidView(
@@ -72,7 +80,11 @@ fun PlayerGestureLayer(
                     getPlaybackPosition = { callbacks.getPlaybackPosition() },
                     getPlaybackDuration = { callbacks.getPlaybackDuration() },
                     onSeekPreview = { callbacks.onSeekPreview(it) },
-                    onHoldSpeed = { callbacks.onHoldSpeed(it) }
+                    onHoldSpeed = { callbacks.onHoldSpeed(it) },
+                    isVrLookAround = { callbacks.vrLookAround },
+                    onLookAround = { yaw, pitch -> callbacks.onLookAround(yaw, pitch) },
+                    onFovScale = { callbacks.onFovScale(it) },
+                    getVrSurface = { callbacks.getVrSurface() }
                 )
                 setOnTouchListener { _, event ->
                     if (!callbacks.enabled) return@setOnTouchListener false
@@ -95,6 +107,10 @@ fun PlayerGestureLayer(
             callbacks.getPlaybackDuration = getPlaybackDuration
             callbacks.onSeekPreview = onSeekPreview
             callbacks.onHoldSpeed = onHoldSpeed
+            callbacks.vrLookAround = vrLookAround
+            callbacks.onLookAround = onLookAround
+            callbacks.onFovScale = onFovScale
+            callbacks.getVrSurface = getVrSurface
         },
         modifier = modifier.fillMaxSize()
     )

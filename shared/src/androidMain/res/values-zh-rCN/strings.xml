@@ -299,6 +299,20 @@
 
     <!-- Player Transcoding Dialogs -->
     <string name="player_dialog_audio_title">音频</string>
+    <string name="player_vr_chip_enable">VR · 转平面</string>
+    <string name="player_vr_chip_on">VR 平面</string>
+    <string name="player_vr_projection_title">VR 投影</string>
+    <string name="player_vr_projection_summary">解析不准时手动选择片源布局</string>
+    <string name="player_vr_projection_count">%d 种布局</string>
+    <string name="player_vr_layout_180_sbs">180° 左右眼</string>
+    <string name="player_vr_layout_180_tb">180° 上下眼</string>
+    <string name="player_vr_layout_180_mono">180° 单目</string>
+    <string name="player_vr_layout_360_sbs">360° 左右眼</string>
+    <string name="player_vr_layout_360_tb">360° 上下眼</string>
+    <string name="player_vr_layout_360_mono">360° 单目</string>
+    <string name="player_vr_layout_fisheye_190_sbs">鱼眼 190° 左右眼</string>
+    <string name="player_vr_layout_fisheye_200_sbs">鱼眼 200° 左右眼</string>
+    <string name="player_vr_layout_fisheye_220_sbs">鱼眼 220° 左右眼</string>
     <string name="player_dialog_audio_summary">选择首选的播放曲目</string>
     <string name="player_dialog_subtitles_title">字幕</string>
     <string name="player_dialog_subtitles_summary">选择字幕曲目</string>

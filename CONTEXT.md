@@ -47,6 +47,10 @@ _Avoid_: playback report, watch history
 A GitHub Release compared against the installed version name. It is not a Play Store listing.
 _Avoid_: Play update, in-app purchase, sidecar
 
+**VR Flat Playback**:
+Playing a VR / 180 / 360 / fisheye video as a rectilinear 2D window (left eye), not a headset stereo pair.
+_Avoid_: 360 mode, spherical player, 3D SBS
+
 **Update Asset**:
 A signed APK attached to an App Update, identified by flavor (phone or tv) and ABI.
 _Avoid_: package, binary, artifact

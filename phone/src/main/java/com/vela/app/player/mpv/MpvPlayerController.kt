@@ -6,6 +6,7 @@ import android.system.Os
 import android.util.Log
 import android.view.Surface
 import androidx.media3.common.util.UnstableApi
+import com.vela.app.player.vr.VrFlattenFilter
 import com.vela.player.core.PlayerUtils
 import com.vela.player.preferences.PlayerPreferences
 import com.vela.player.video.HdrCapabilityManager
@@ -26,6 +27,7 @@ class MpvPlayerController(
     companion object {
         private const val SUBTITLE_LOG_TAG = "JellyCine-Sub"
         private const val DOLBY_LOG_TAG = "MpvDolby"
+        private const val VR_LOG_TAG = "JellyCine-VR"
     }
 
     interface Listener {
@@ -53,6 +55,7 @@ class MpvPlayerController(
     private var subtitleFontFamily: String = "sans-serif"
     private val playerPreferences = PlayerPreferences(context.applicationContext)
     private var lastDolbyRuntimePath: String? = null
+    private var vrShaderActive = false
     @Volatile
     private var listener: Listener = listener
 
@@ -102,6 +105,7 @@ class MpvPlayerController(
         pendingSelectedSubtitleUrl = selectedSubtitleUrl
         pendingSubtitleTrackId = subtitleTrackId?.takeUnless { it == "no" }
         lastDolbyRuntimePath = null
+        clearVrFlattenShader()
         MPVLib.setPropertyBoolean("pause", true)
         listener.onBuffering()
         applyRemoteStreamOptions(remoteHttpPlayback)
@@ -256,6 +260,45 @@ class MpvPlayerController(
         if (!released) {
             MPVLib.setPropertyString("hwdec", mode)
         }
+    }
+
+    fun setVrFlattenShader(opts: String?) {
+        if (released) return
+        if (opts.isNullOrBlank()) {
+            clearVrFlattenShader()
+            return
+        }
+        val shader = installVrFlattenShader() ?: return
+        vrShaderActive = true
+        setMpv("glsl-shaders", shader.absolutePath)
+        setMpv("glsl-shader-opts", opts)
+        Log.i(VR_LOG_TAG, "glsl hook=${shader.name} opts=$opts")
+    }
+
+    fun setVrLook(opts: String) {
+        if (released || !vrShaderActive) return
+        setMpv("glsl-shader-opts", opts)
+    }
+
+    private fun clearVrFlattenShader() {
+        vrShaderActive = false
+        if (!released) {
+            setMpv("glsl-shaders", "")
+            setMpv("glsl-shader-opts", "")
+        }
+    }
+
+    private fun installVrFlattenShader(): File? {
+        val dest = appContext.filesDir.resolve("mpv-shaders").apply { mkdirs() }
+            .resolve(VrFlattenFilter.SHADER_FILE_NAME)
+        return runCatching {
+            appContext.assets.open(VrFlattenFilter.SHADER_ASSET).use { input ->
+                dest.outputStream().use { output -> input.copyTo(output) }
+            }
+            dest
+        }.onFailure { error ->
+            Log.e(VR_LOG_TAG, "failed to install VR flatten shader", error)
+        }.getOrNull()
     }
 
     fun setVolume(volume: Float) {
@@ -485,11 +528,12 @@ class MpvPlayerController(
             "decode path=${options.playbackPath} vf=${options.vf.ifBlank { "<none>" }} " +
                 "vd-lavc-o=${options.vdLavcO.ifBlank { "<none>" }}"
         )
+        val vf = options.vf
         if (asOptions) {
-            MPVLib.setOptionString("vf", options.vf)
+            MPVLib.setOptionString("vf", vf)
             MPVLib.setOptionString("vd-lavc-o", options.vdLavcO)
         } else {
-            setMpv("vf", options.vf)
+            setMpv("vf", vf)
             setMpv("vd-lavc-o", options.vdLavcO)
         }
     }

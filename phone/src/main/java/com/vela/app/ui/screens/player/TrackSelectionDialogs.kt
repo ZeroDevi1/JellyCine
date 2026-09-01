@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,10 @@ import com.vela.data.model.AudioTranscodeMode
 import com.vela.player.core.AudioTrackInfo
 import com.vela.player.core.SubtitleTrackInfo
 import com.vela.player.preferences.PlayerPreferences
+import com.vela.app.player.vr.VrLayout
+import com.vela.app.player.vr.VrLayoutParser
+import com.vela.app.player.vr.VrProjection
+import com.vela.app.player.vr.VrStereo
 
 @Composable
 fun AudioTrackSelectionDialog(
@@ -119,6 +124,66 @@ fun SubtitleTrackSelectionDialog(
             )
         }
     )
+}
+
+@Composable
+fun VrProjectionSelectionDialog(
+    isVisible: Boolean,
+    currentProjectionId: String?,
+    onProjectionSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!isVisible) return
+
+    val options = VrLayoutParser.manualOptions().map { layout ->
+        VrProjectionOption(
+            id = layout.id,
+            label = vrLayoutLabel(layout)
+        )
+    }
+    val selected = options.firstOrNull { it.id == currentProjectionId } ?: options.first()
+
+    TrackSelectionDialog(
+        title = stringResource(R.string.player_vr_projection_title),
+        helperText = stringResource(R.string.player_vr_projection_summary),
+        itemCountLabel = stringResource(R.string.player_vr_projection_count),
+        icon = Icons.Rounded.ViewInAr,
+        accentColor = Color(0xFF8B5CF6),
+        tracks = options,
+        currentTrack = selected,
+        onTrackSelected = onProjectionSelected,
+        onDismiss = onDismiss,
+        trackKey = { option -> option.id },
+        isTrackSelected = { option, current -> option.id == current?.id },
+        trackDisplayInfo = { option ->
+            TrackDisplayInfo(
+                title = option.label,
+                subtitle = "",
+                description = ""
+            )
+        }
+    )
+}
+
+@Composable
+private fun vrLayoutLabel(layout: VrLayout): String {
+    return when (layout.projection) {
+        VrProjection.HalfEquirect -> when (layout.stereo) {
+            VrStereo.SideBySide -> stringResource(R.string.player_vr_layout_180_sbs)
+            VrStereo.TopBottom -> stringResource(R.string.player_vr_layout_180_tb)
+            VrStereo.Mono -> stringResource(R.string.player_vr_layout_180_mono)
+        }
+        VrProjection.Equirect -> when (layout.stereo) {
+            VrStereo.SideBySide -> stringResource(R.string.player_vr_layout_360_sbs)
+            VrStereo.TopBottom -> stringResource(R.string.player_vr_layout_360_tb)
+            VrStereo.Mono -> stringResource(R.string.player_vr_layout_360_mono)
+        }
+        VrProjection.Fisheye -> when (layout.inputFov) {
+            200 -> stringResource(R.string.player_vr_layout_fisheye_200_sbs)
+            220 -> stringResource(R.string.player_vr_layout_fisheye_220_sbs)
+            else -> stringResource(R.string.player_vr_layout_fisheye_190_sbs)
+        }
+    }
 }
 
 @Composable
@@ -568,6 +633,11 @@ private data class TrackDisplayInfo(
     val title: String,
     val subtitle: String,
     val description: String = ""
+)
+
+private data class VrProjectionOption(
+    val id: String,
+    val label: String
 )
 
 private data class StreamingQualityOption(

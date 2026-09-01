@@ -1,8 +1,9 @@
 package com.vela.app.ui.screens.player
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioManager
+import android.view.LayoutInflater
+import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -18,13 +19,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vela.player.preferences.PlayerPreferences
 import androidx.lifecycle.Lifecycle
+import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.video.spherical.SphericalGLSurfaceView
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.media3.common.util.UnstableApi
+import com.vela.app.R
 import com.vela.app.player.mpv.MpvPlayerController
+import com.vela.app.player.vr.VrLayout
+import com.vela.app.player.vr.VrStereo
 import kotlin.math.roundToInt
 
 @UnstableApi
@@ -50,6 +56,9 @@ fun VideoSurface(
     onSurfaceReady: () -> Unit = {},
     snapTransform: Boolean = false,
     subtitleAppearanceEpoch: Int = 0,
+    vrFlatEnabled: Boolean = false,
+    vrLayout: VrLayout? = null,
+    onSphericalTouchTarget: ((View?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -109,23 +118,16 @@ fun VideoSurface(
                 lifecycle = lifecycle,
                 isInPictureInPictureMode = isInPictureInPictureMode,
                 resizeMode = resizeMode,
-                audioManager = audioManager,
-                onToggleControls = onToggleControls,
-                onSeek = onSeek,
-                onVolumeChange = onVolumeChange,
-                onBrightnessChange = onBrightnessChange,
-                getCurrentVolumeLevel = getCurrentVolumeLevel,
-                getCurrentBrightnessLevel = getCurrentBrightnessLevel,
-                onZoomChange = onZoomChange,
-                onTogglePlayPause = onTogglePlayPause,
                 subtitleAppearanceEpoch = subtitleAppearanceEpoch,
+                vrFlatEnabled = vrFlatEnabled,
+                vrLayout = vrLayout,
+                onSphericalTouchTarget = onSphericalTouchTarget,
                 modifier = surfaceModifier
             )
         }
     }
 }
 
-@SuppressLint("ClickableViewAccessibility")
 @UnstableApi
 @Composable
 private fun ExoPlayerView(
@@ -133,55 +135,77 @@ private fun ExoPlayerView(
     lifecycle: Lifecycle.Event,
     isInPictureInPictureMode: Boolean,
     resizeMode: Int,
-    audioManager: AudioManager,
-    onToggleControls: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onVolumeChange: (Float) -> Unit,
-    onBrightnessChange: (Float) -> Unit,
-    getCurrentVolumeLevel: () -> Float,
-    getCurrentBrightnessLevel: () -> Float,
-    onZoomChange: (Boolean) -> Unit,
-    onTogglePlayPause: () -> Unit,
     @Suppress("UNUSED_PARAMETER") subtitleAppearanceEpoch: Int,
+    vrFlatEnabled: Boolean,
+    vrLayout: VrLayout?,
+    onSphericalTouchTarget: ((View?) -> Unit)?,
     modifier: Modifier
 ) {
     val context = LocalContext.current
     val playerPreferences = remember { PlayerPreferences(context) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
-    AndroidView(
-        factory = { viewContext ->
-            PlayerView(viewContext).apply {
-                useController = false
-                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                setKeepContentOnPlayerReset(true)
-                this.resizeMode = resizeMode
-                setBackgroundColor(android.graphics.Color.BLACK)
-                setPadding(0, 0, 0, 0)
-                layoutParams = android.view.ViewGroup.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                setDefaultArtwork(null)
+    DisposableEffect(vrFlatEnabled) {
+        onDispose {
+            playerViewRef?.player = null
+            playerViewRef = null
+            onSphericalTouchTarget?.invoke(null)
+        }
+    }
 
-                // Gestures are handled by PlayerGestureLayer so portrait letterbox swipes work.
-            }
-        },
-        update = { playerView ->
-            playerView.player = player
-            playerView.resizeMode = resizeMode
-            playerView.applySubtitlePreferences(playerPreferences)
-
-            when (lifecycle) {
-                // 播放意图由 PlayerScreenEffects 管理；Surface 生命周期不能把 PiP 的 ON_PAUSE 当成用户暂停。
-                Lifecycle.Event.ON_STOP -> {
-                    if (!isInPictureInPictureMode) playerView.onPause()
+    key(vrFlatEnabled) {
+        AndroidView(
+            factory = { viewContext ->
+                val playerView = if (vrFlatEnabled) {
+                    LayoutInflater.from(viewContext)
+                        .inflate(R.layout.player_view_spherical, null, false) as PlayerView
+                } else {
+                    PlayerView(viewContext)
                 }
-                Lifecycle.Event.ON_RESUME -> playerView.onResume()
-                else -> Unit
-            }
-        },
-        modifier = modifier
-    )
+                playerView.apply {
+                    useController = false
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    setKeepContentOnPlayerReset(true)
+                    this.resizeMode = resizeMode
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    setPadding(0, 0, 0, 0)
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setDefaultArtwork(null)
+                }
+            },
+            update = { playerView ->
+                playerViewRef = playerView
+                playerView.player = player
+                playerView.resizeMode = resizeMode
+                playerView.applySubtitlePreferences(playerPreferences)
+                val spherical = playerView.videoSurfaceView as? SphericalGLSurfaceView
+                spherical?.setUseSensorRotation(false)
+                spherical?.setDefaultStereoMode(vrLayout.toExoStereoMode())
+                onSphericalTouchTarget?.invoke(if (vrFlatEnabled) spherical else null)
+
+                when (lifecycle) {
+                    Lifecycle.Event.ON_STOP -> {
+                        if (!isInPictureInPictureMode) playerView.onPause()
+                    }
+                    Lifecycle.Event.ON_RESUME -> playerView.onResume()
+                    else -> Unit
+                }
+            },
+            modifier = modifier
+        )
+    }
+}
+
+@UnstableApi
+private fun VrLayout?.toExoStereoMode(): Int {
+    return when (this?.stereo) {
+        VrStereo.TopBottom -> C.STEREO_MODE_TOP_BOTTOM
+        VrStereo.SideBySide -> C.STEREO_MODE_LEFT_RIGHT
+        else -> C.STEREO_MODE_MONO
+    }
 }
 
 @UnstableApi

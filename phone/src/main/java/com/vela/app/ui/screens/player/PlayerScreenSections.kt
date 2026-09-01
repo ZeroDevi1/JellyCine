@@ -105,6 +105,7 @@ internal fun PlayerScreenEffects(
     showStreamingQualityDialog: Boolean,
     showAudioTranscodingDialog: Boolean,
     showMediaInfo: Boolean,
+    showVrProjectionDialog: Boolean = false,
     autoHideKey: Int,
     isScrubbing: Boolean,
     hideSystemBars: () -> Unit,
@@ -350,7 +351,8 @@ internal fun PlayerScreenEffects(
         showSubtitleTrackDialog,
         showStreamingQualityDialog,
         showAudioTranscodingDialog,
-        showMediaInfo
+        showMediaInfo,
+        showVrProjectionDialog
     ) {
         if (
             uiStateProvider().controlsVisible ||
@@ -358,7 +360,8 @@ internal fun PlayerScreenEffects(
             showSubtitleTrackDialog ||
             showStreamingQualityDialog ||
             showAudioTranscodingDialog ||
-            showMediaInfo
+            showMediaInfo ||
+            showVrProjectionDialog
         ) {
             hideSystemBars()
         }
@@ -410,6 +413,7 @@ internal fun BoxScope.PlayerOverlayHost(
     onTitleClick: () -> Unit = {},
     onEnterPip: () -> Unit = {},
     onShowChapters: () -> Unit = {},
+    onShowVrProjection: () -> Unit = {},
     onBackgroundClick: () -> Unit = {},
     onSeekFeedback: (String, SeekSide) -> Unit = { _, _ -> },
     onPositionChanged: (Long) -> Unit = {}
@@ -589,6 +593,16 @@ internal fun BoxScope.PlayerOverlayHost(
             playbackSpeed = playerState.playbackSpeed,
             hardwareDecodingEnabled = playerState.hardwareDecoding !=
                 PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
+            vrDetected = playerState.vrDetected,
+            vrFlatEnabled = playerState.vrFlatEnabled,
+            onToggleVrFlat = {
+                resetAutoHideTimer()
+                viewModel.toggleVrFlatPlayback()
+            },
+            onShowVrProjection = {
+                resetAutoHideTimer()
+                onShowVrProjection()
+            },
             onUserInteraction = resetAutoHideTimer,
             onBackgroundClick = onBackgroundClick,
             skipActionLabel = when (activeSkippableSegment?.type) {
@@ -766,7 +780,11 @@ internal fun PlayerDialogsHost(
     onDismissSubtitleTrackDialog: () -> Unit,
     onDismissStreamingQualityDialog: () -> Unit,
     onDismissAudioTranscodingDialog: () -> Unit,
-    onDismissMediaInfo: () -> Unit
+    onDismissMediaInfo: () -> Unit,
+    showVrProjectionDialog: Boolean = false,
+    currentVrProjectionId: String? = null,
+    onVrProjectionSelected: (String) -> Unit = {},
+    onDismissVrProjectionDialog: () -> Unit = {}
 ) {
     AudioTrackSelectionDialog(
         isVisible = showAudioTrackDialog,
@@ -807,6 +825,13 @@ internal fun PlayerDialogsHost(
             )
         }
     }
+
+    VrProjectionSelectionDialog(
+        isVisible = showVrProjectionDialog,
+        currentProjectionId = currentVrProjectionId,
+        onProjectionSelected = onVrProjectionSelected,
+        onDismiss = onDismissVrProjectionDialog
+    )
 }
 
 private fun requestedOrientationFor(orientation: String): Int {

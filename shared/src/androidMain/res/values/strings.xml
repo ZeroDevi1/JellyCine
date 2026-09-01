@@ -300,6 +300,20 @@
 
     <!-- Player Transcoding Dialogs -->
     <string name="player_dialog_audio_title">Audio</string>
+    <string name="player_vr_chip_enable">VR · Flatten</string>
+    <string name="player_vr_chip_on">VR Flat</string>
+    <string name="player_vr_projection_title">VR projection</string>
+    <string name="player_vr_projection_summary">Choose the source layout if detection is wrong</string>
+    <string name="player_vr_projection_count">%d layouts</string>
+    <string name="player_vr_layout_180_sbs">180° SBS</string>
+    <string name="player_vr_layout_180_tb">180° Top-Bottom</string>
+    <string name="player_vr_layout_180_mono">180° Mono</string>
+    <string name="player_vr_layout_360_sbs">360° SBS</string>
+    <string name="player_vr_layout_360_tb">360° Top-Bottom</string>
+    <string name="player_vr_layout_360_mono">360° Mono</string>
+    <string name="player_vr_layout_fisheye_190_sbs">Fisheye 190° SBS</string>
+    <string name="player_vr_layout_fisheye_200_sbs">Fisheye 200° SBS</string>
+    <string name="player_vr_layout_fisheye_220_sbs">Fisheye 220° SBS</string>
     <string name="player_dialog_audio_summary">Select preferred playback track</string>
     <string name="player_dialog_subtitles_title">Subtitles</string>
     <string name="player_dialog_subtitles_summary">Select subtitle track</string>
