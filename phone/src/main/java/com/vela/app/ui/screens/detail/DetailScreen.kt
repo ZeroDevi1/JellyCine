@@ -457,7 +457,15 @@ fun DetailScreenContainer(
                     onCastButtonClick = ::openCastingDisplay,
                     onSeriesOverviewClick = ::navigateToSeriesOverview,
                     onSeasonClick = ::openSeasonDetail,
-                    onItemDeleted = handleBackNavigation
+                    onItemDeleted = handleBackNavigation,
+                    onPlayPart = { part ->
+                        startPlaybackForItem(
+                            targetItem = part,
+                            fallbackItemId = part.id?.takeIf { it.isNotBlank() } ?: fallbackItemId,
+                            audioStreamIndex = preferredAudioStreamIndex,
+                            subtitleStreamIndex = preferredSubtitleStreamIndex
+                        )
+                    }
                 )
             } else {
                 DetailScreenSkeleton(onBackPressed = handleBackNavigation)
@@ -692,7 +700,8 @@ fun DetailScreen(
     onCastButtonClick: () -> Unit = {},
     onSeriesOverviewClick: (String) -> Unit = {},
     onSeasonClick: (String, String, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
-    onItemDeleted: () -> Unit = {}
+    onItemDeleted: () -> Unit = {},
+    onPlayPart: (BaseItemDto) -> Unit = {}
 ) {
     DetailContent(
         item = item,
@@ -713,7 +722,8 @@ fun DetailScreen(
         onCastButtonClick = onCastButtonClick,
         onSeriesOverviewClick = onSeriesOverviewClick,
         onSeasonClick = onSeasonClick,
-        onItemDeleted = onItemDeleted
+        onItemDeleted = onItemDeleted,
+        onPlayPart = onPlayPart
     )
 }
 

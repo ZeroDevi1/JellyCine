@@ -270,6 +270,14 @@ internal class MediaServerApiClient(
         )
     )
 
+    override suspend fun getAdditionalParts(
+        itemId: String,
+        userId: String?
+    ): ApiResponse<QueryResult<BaseItemDto>> = get(
+        endpoint = "Videos/$itemId/AdditionalParts",
+        queryParameters = listOf("userId" to userId)
+    )
+
     override suspend fun markAsFavorite(
         userId: String,
         itemId: String

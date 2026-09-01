@@ -142,6 +142,11 @@ interface MediaServerApi {
         fields: String? = "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,SeriesName,SeriesId,UserData"
     ): ApiResponse<QueryResult<BaseItemDto>>
 
+    suspend fun getAdditionalParts(
+        itemId: String,
+        userId: String? = null
+    ): ApiResponse<QueryResult<BaseItemDto>>
+
     suspend fun markAsFavorite(
         userId: String,
         itemId: String

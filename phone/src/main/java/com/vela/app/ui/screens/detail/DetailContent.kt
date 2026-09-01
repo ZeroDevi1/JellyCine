@@ -104,7 +104,8 @@ fun DetailContent(
     onCastButtonClick: () -> Unit = {},
     onSeriesOverviewClick: (String) -> Unit = {},
     onSeasonClick: (String, String, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
-    onItemDeleted: () -> Unit = {}
+    onItemDeleted: () -> Unit = {},
+    onPlayPart: (BaseItemDto) -> Unit = {}
 ) {
     val context = LocalContext.current
     val mediaRepository = remember { MediaRepositoryProvider.getInstance(context) }
@@ -1413,6 +1414,12 @@ fun DetailContent(
                             PhotosSection(
                                 item = item,
                                 mediaRepository = mediaRepository
+                            )
+                            AdditionalPartsSection(
+                                item = item,
+                                isSeerDetail = isSeerDetail,
+                                mediaRepository = mediaRepository,
+                                onPartClick = onPlayPart
                             )
                             TrailersExtrasSection(
                                 item = item,

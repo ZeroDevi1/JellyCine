@@ -447,7 +447,7 @@ class MediaRepository(private val context: Context) {
         return try {
             val api = getApi() ?: return Result.failure(Exception(string(R.string.data_error_api_not_available)))
             val userId = getUserId() ?: return Result.failure(Exception(string(R.string.data_error_user_id_not_available)))
-            val detailFields = "People,Studios,Genres,Overview,ChildCount,RecursiveItemCount,EpisodeCount,SeriesName,SeriesId,OfficialRating,UserData,Chapters,ProviderIds,IndexNumber,ParentIndexNumber,PremiereDate,SeasonName,SeasonId,RemoteTrailers,MediaStreams,MediaSources,ExternalUrls,Tags,Path,DateCreated,Video3DFormat"
+            val detailFields = "People,Studios,Genres,Overview,ChildCount,RecursiveItemCount,EpisodeCount,SeriesName,SeriesId,OfficialRating,UserData,Chapters,ProviderIds,IndexNumber,ParentIndexNumber,PremiereDate,SeasonName,SeasonId,RemoteTrailers,MediaStreams,MediaSources,ExternalUrls,Tags,Path,DateCreated,Video3DFormat,PartCount"
             val response = api.getItemById(
                 userId = userId,
                 itemId = itemId,
@@ -578,6 +578,25 @@ class MediaRepository(private val context: Context) {
                 Result.success(queryResult.items.orEmpty().filter { it.id != itemId })
             } else {
                 Result.failure(Exception(string(R.string.media_error_fetch_similar_items_failed, response.code(), response.message())))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdditionalParts(itemId: String): Result<List<BaseItemDto>> {
+        return try {
+            val api = getApi() ?: return Result.failure(Exception(string(R.string.data_error_api_not_available)))
+            val userId = getUserId()
+            val response = api.getAdditionalParts(itemId = itemId, userId = userId)
+            if (response.isSuccessful) {
+                Result.success(
+                    response.body()?.items.orEmpty().filter { part ->
+                        !part.id.isNullOrBlank() && part.id != itemId
+                    }
+                )
+            } else {
+                Result.success(emptyList())
             }
         } catch (e: Exception) {
             Result.failure(e)

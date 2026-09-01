@@ -822,6 +822,8 @@
     <string name="detail_cast_and_crew">演职人员</string>
     <string name="detail_photos">相册</string>
     <string name="detail_trailers_and_extras">预告片和花絮</string>
+    <string name="detail_additional_parts">分段</string>
+    <string name="detail_part_index">第 %1$d 段</string>
     <string name="detail_similar_items_title">更多类似内容</string>
     <string name="detail_directed_by">由 %1$s 执导</string>
     <string name="detail_seerr_recommendations_title">Seerr 推荐</string>
