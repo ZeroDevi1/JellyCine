@@ -102,7 +102,9 @@ jobs:
           VELA_STORE_PASSWORD: ${{ secrets.VELA_STORE_PASSWORD }}
           VELA_KEY_ALIAS: vela
           VELA_KEY_PASSWORD: ${{ secrets.VELA_KEY_PASSWORD }}
-        run: ./gradlew :phone:assembleRelease :tv:assembleRelease
+        run: |
+          ./gradlew :phone:assembleRelease --max-workers=2
+          ./gradlew :tv:assembleRelease --max-workers=2
 
       - name: Verify APKs are signed
         run: |

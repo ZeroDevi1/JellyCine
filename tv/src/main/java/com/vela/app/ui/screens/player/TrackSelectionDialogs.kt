@@ -53,6 +53,7 @@ import com.vela.shared.R
 import com.vela.data.model.AudioTranscodeMode
 import com.vela.player.core.AudioTrackInfo
 import com.vela.player.core.SubtitleTrackInfo
+import com.vela.player.core.TrackDetails
 import com.vela.player.preferences.PlayerPreferences
 
 @Composable
@@ -74,10 +75,11 @@ fun AudioTrackSelectionDialog(
     ) {
         itemsIndexed(audioTracks, key = { _, t -> t.id }) { index, track ->
             val isSelected = track.id == currentAudioTrack?.id
+            val lines = TrackDetails.audioDialogLines(track)
             TvTrackItem(
-                title = track.label.takeIf { it.isNotBlank() } ?: "Track ${index + 1}",
-                subtitle = buildAudioTrackSubtitle(track),
-                description = buildAudioTrackDescription(track),
+                title = lines.first.ifBlank { "Track ${index + 1}" },
+                subtitle = lines.second,
+                description = lines.third,
                 isSelected = isSelected,
                 accentColor = Color(0xFF00A9D6),
                 requestFocus = isSelected || (currentAudioTrack == null && index == 0),
@@ -106,10 +108,11 @@ fun SubtitleTrackSelectionDialog(
     ) {
         itemsIndexed(subtitleTracks, key = { _, t -> t.id }) { index, track ->
             val isSelected = track.id == currentSubtitleTrack?.id
+            val lines = TrackDetails.subtitleDialogLines(track)
             TvTrackItem(
-                title = track.label.takeIf { it.isNotBlank() } ?: "Track ${index + 1}",
-                subtitle = buildSubtitleTrackSubtitle(track),
-                description = buildSubtitleTrackDescription(track),
+                title = lines.first.ifBlank { "Track ${index + 1}" },
+                subtitle = lines.second,
+                description = lines.third,
                 isSelected = isSelected,
                 accentColor = Color(0xFFFF6B3B),
                 requestFocus = isSelected || (currentSubtitleTrack == null && index == 0),
@@ -388,64 +391,3 @@ private fun TvTrackItem(
     }
 }
 
-private fun buildAudioTrackSubtitle(track: AudioTrackInfo): String {
-    return buildList {
-        track.language?.takeIf { it.isNotEmpty() && !it.equals("und", ignoreCase = true) }?.let {
-            add(it.uppercase())
-        }
-        track.codec?.takeIf { it.isNotEmpty() }?.let { codec ->
-            add(when (codec.lowercase()) {
-                "aac" -> "AAC"
-                "mp3" -> "MP3"
-                "ac3" -> "Dolby Digital"
-                "eac3" -> "Dolby Digital Plus"
-                "truehd" -> "Dolby TrueHD"
-                "dts" -> "DTS"
-                "dtshd" -> "DTS-HD"
-                "flac" -> "FLAC"
-                "opus" -> "Opus"
-                "vorbis" -> "Vorbis"
-                else -> codec.uppercase()
-            })
-        }
-        if (track.channelCount > 0) {
-            add(when (track.channelCount) {
-                1 -> "Mono"
-                2 -> "Stereo"
-                6 -> "5.1"
-                8 -> "7.1"
-                else -> "${track.channelCount}ch"
-            })
-        }
-    }.joinToString(" • ")
-}
-
-private fun buildAudioTrackDescription(track: AudioTrackInfo): String {
-    return buildList {
-        track.codec?.lowercase()?.let { codec ->
-            when {
-                codec.contains("truehd") || codec.contains("flac") -> add("Lossless")
-                codec.contains("dts") -> add("High Quality")
-                codec.contains("eac3") -> add("Enhanced")
-            }
-        }
-        if (track.channelCount >= 6) add("Surround")
-    }.joinToString(" • ")
-}
-
-private fun buildSubtitleTrackSubtitle(track: SubtitleTrackInfo): String {
-    return buildList {
-        track.language?.takeIf {
-            it.isNotEmpty() && !it.equals("und", ignoreCase = true)
-        }?.let { add(it.uppercase()) }
-        if (track.isForced) add("FORCED")
-        if (track.isDefault) add("DEFAULT")
-    }.joinToString(" • ")
-}
-
-private fun buildSubtitleTrackDescription(track: SubtitleTrackInfo): String {
-    return buildList {
-        if (track.isForced) add("Forced subtitles")
-        if (track.isDefault) add("Default track")
-    }.joinToString(" • ")
-}

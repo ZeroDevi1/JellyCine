@@ -46,7 +46,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.vela.data.model.MediaStream
-import com.vela.player.core.defaultSubtitleDisplayTitle
+import com.vela.player.core.TrackDetails
 import com.vela.player.core.mediaStreamDisplayTitles
 import com.vela.shared.R
 
@@ -416,17 +416,30 @@ internal fun buildVideoOptions(streams: List<MediaStream>): List<String> {
 }
 
 internal fun buildAudioOptions(streams: List<MediaStream>): List<String> {
-    return OptionLabels(mediaStreamDisplayTitles(streams, "Audio"))
+    return OptionLabels(
+        streams
+            .filter { it.type == "Audio" }
+            .sortedBy { it.index ?: Int.MAX_VALUE }
+            .map(TrackDetails::audioOptionLabel)
+    )
 }
 
 internal fun buildSubtitleOptions(streams: List<MediaStream>): List<String> {
     val options = mutableListOf("Off")
-    options += mediaStreamDisplayTitles(streams, "Subtitle")
+    options += streams
+        .filter { it.type == "Subtitle" }
+        .sortedBy { it.index ?: Int.MAX_VALUE }
+        .map(TrackDetails::subtitleOptionLabel)
     return OptionLabels(options)
 }
 
 internal fun buildDefaultSubtitleOption(streams: List<MediaStream>): String {
-    return defaultSubtitleDisplayTitle(streams)
+    return streams
+        .filter { it.type == "Subtitle" }
+        .sortedBy { it.index ?: Int.MAX_VALUE }
+        .firstOrNull { it.isDefault == true }
+        ?.let(TrackDetails::subtitleOptionLabel)
+        ?: "Off"
 }
 
 

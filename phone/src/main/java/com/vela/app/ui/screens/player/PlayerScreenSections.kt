@@ -409,6 +409,7 @@ internal fun BoxScope.PlayerOverlayHost(
     onAddLocalSubtitle: () -> Unit = {},
     onShowSubtitleStyle: () -> Unit = {},
     onShowSubtitleDelay: () -> Unit = {},
+    onAdjustVideoSize: () -> Unit = {},
     onToggleOrientation: () -> Unit = {},
     onTitleClick: () -> Unit = {},
     onEnterPip: () -> Unit = {},
@@ -541,6 +542,10 @@ internal fun BoxScope.PlayerOverlayHost(
             onCycleAspectRatio = {
                 resetAutoHideTimer()
                 viewModel.cycleAspectRatio()
+            },
+            onAdjustVideoSize = {
+                resetAutoHideTimer()
+                onAdjustVideoSize()
             },
             onToggleOrientation = {
                 resetAutoHideTimer()

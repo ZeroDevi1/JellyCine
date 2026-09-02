@@ -8,6 +8,7 @@ import com.vela.data.model.requiresExternalSubtitleLoad
 import com.vela.player.core.AudioTrackInfo
 import com.vela.player.core.PlayerTrackState
 import com.vela.player.core.SubtitleTrackInfo
+import com.vela.player.core.TrackDetails
 import com.vela.player.preferences.PlayerPreferences
 import java.io.File
 import java.net.HttpURLConnection
@@ -51,15 +52,18 @@ object MPVPlayer {
         val subtitleStreams = streams(mediaStreams, "Subtitle")
         val audioTracks = audioStreams.mapNotNull { stream ->
             val streamIndex = stream.index ?: return@mapNotNull null
-            AudioTrackInfo(
-                id = "audio:$streamIndex",
-                label = stream.displayTitle ?: stream.title ?: stream.language ?: "Audio $streamIndex",
-                language = stream.language,
-                channelCount = stream.channels ?: 0,
-                codec = stream.codec,
-                playerTrackId = trackId(audioStreams, streamIndex) ?: return@mapNotNull null,
-                streamIndex = streamIndex,
-                requiresPlaybackRestart = false
+            TrackDetails.applyStreamDetails(
+                AudioTrackInfo(
+                    id = "audio:$streamIndex",
+                    label = stream.displayTitle ?: stream.title ?: stream.language ?: "Audio $streamIndex",
+                    language = stream.language,
+                    channelCount = stream.channels ?: 0,
+                    codec = stream.codec,
+                    playerTrackId = trackId(audioStreams, streamIndex) ?: return@mapNotNull null,
+                    streamIndex = streamIndex,
+                    requiresPlaybackRestart = false
+                ),
+                stream
             )
         }
         val subtitleTracks = listOf(
@@ -72,15 +76,18 @@ object MPVPlayer {
             )
         ) + subtitleStreams.mapNotNull { stream ->
             val streamIndex = stream.index ?: return@mapNotNull null
-            SubtitleTrackInfo(
-                id = "subtitle:$streamIndex",
-                label = stream.displayTitle ?: stream.title ?: stream.language ?: "Subtitle $streamIndex",
-                language = stream.language,
-                isForced = stream.isForced == true,
-                isDefault = stream.isDefault == true,
-                playerTrackId = trackId(subtitleStreams, streamIndex) ?: return@mapNotNull null,
-                streamIndex = streamIndex,
-                requiresPlaybackRestart = false
+            TrackDetails.applyStreamDetails(
+                SubtitleTrackInfo(
+                    id = "subtitle:$streamIndex",
+                    label = stream.displayTitle ?: stream.title ?: stream.language ?: "Subtitle $streamIndex",
+                    language = stream.language,
+                    isForced = stream.isForced == true,
+                    isDefault = stream.isDefault == true,
+                    playerTrackId = trackId(subtitleStreams, streamIndex) ?: return@mapNotNull null,
+                    streamIndex = streamIndex,
+                    requiresPlaybackRestart = false
+                ),
+                stream
             )
         }
 

@@ -25,6 +25,7 @@ import com.vela.player.core.PlaybackMarkerUtils
 import com.vela.player.core.PlayerState
 import com.vela.player.core.PlayerTrack
 import com.vela.player.core.PlayerUtils
+import com.vela.player.core.TrackDetails
 import com.vela.player.preferences.PlayerPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -114,10 +115,8 @@ class PlayerViewModel @Inject constructor(
                 playerContext = context
                 hasHandledPlaybackCompletion = false
                 val playerPreferences = com.vela.player.preferences.PlayerPreferences(context)
-                val resolvedPreferredAudioStreamIndex = preferredAudioStreamIndex
-                    ?: playerPreferences.getPreferredAudioStreamIndex(mediaId)
-                val activePreferredSubtitleStreamIndex = preferredSubtitleStreamIndex
-                    ?: playerPreferences.getPreferredSubtitleStreamIndex(mediaId)
+                var resolvedPreferredAudioStreamIndex = preferredAudioStreamIndex
+                var activePreferredSubtitleStreamIndex = preferredSubtitleStreamIndex
                 val isVideoTranscodingAllowed = isVideoTranscodingAllowedForUser()
                 val isAudioTranscodingAllowed = isAudioTranscodingAllowedForUser()
                 val audioTranscodeMode = if (isAudioTranscodingAllowed) {
@@ -160,6 +159,29 @@ class PlayerViewModel @Inject constructor(
                     mediaRepository.getItemById(mediaId).getOrNull()
                 }
                 currentItemDetails = itemDetails
+                val seriesPreferenceId = TrackDetails.seriesPreferenceId(
+                    itemType = itemDetails?.type,
+                    seriesId = itemDetails?.seriesId
+                )
+                val preferenceStreams = itemDetails?.mediaStreams.orEmpty().ifEmpty {
+                    itemDetails?.mediaSources?.firstOrNull()?.mediaStreams.orEmpty()
+                }
+                resolvedPreferredAudioStreamIndex =
+                    playerPreferences.matchSeriesAudioStreamIndex(seriesPreferenceId, preferenceStreams)
+                        ?: resolvedPreferredAudioStreamIndex
+                        ?: playerPreferences.getPreferredAudioStreamIndex(mediaId)
+                activePreferredSubtitleStreamIndex =
+                    playerPreferences.matchSeriesSubtitleStreamIndex(seriesPreferenceId, preferenceStreams)
+                        ?: activePreferredSubtitleStreamIndex
+                        ?: playerPreferences.getPreferredSubtitleStreamIndex(mediaId)
+                trackSelectionCoordinator.resetPendingSelections(
+                    preferredAudioStreamIndex = resolvedPreferredAudioStreamIndex,
+                    preferredSubtitleStreamIndex = activePreferredSubtitleStreamIndex
+                )
+                _preferredStreamIndexes.value = PreferredStreamIndexes(
+                    audioStreamIndex = resolvedPreferredAudioStreamIndex,
+                    subtitleStreamIndex = activePreferredSubtitleStreamIndex
+                )
                 val resumePositionTicks = itemDetails?.userData?.playbackPositionTicks
                 val storedResumePositionMs = if (resumePositionTicks != null && resumePositionTicks > 0) {
                     resumePositionTicks / 10000L
@@ -824,6 +846,7 @@ class PlayerViewModel @Inject constructor(
             val playerTrackId = selectedTrack.playerTrackId ?: return
             trackSelectionCoordinator.markManualTrackSelection()
             PlayerUtils.selectAudioTrack(player, playerTrackId)
+            persistAudioPreference(selectedTrack.streamIndex)
             viewModelScope.launch {
                 delay(500)
                 updateTrackInformation()
@@ -848,11 +871,43 @@ class PlayerViewModel @Inject constructor(
             val playerTrackId = selectedTrack.playerTrackId ?: return
             trackSelectionCoordinator.markManualTrackSelection()
             PlayerUtils.selectSubtitleTrack(player, playerTrackId)
+            persistSubtitlePreference(selectedTrack.streamIndex ?: -1)
             viewModelScope.launch {
                 delay(500)
                 updateTrackInformation()
             }
         }
+    }
+
+    private fun persistAudioPreference(streamIndex: Int?) {
+        val context = playerContext ?: return
+        val mediaId = playbackSession.mediaId ?: return
+        com.vela.player.preferences.PlayerPreferences(context).persistAudioSelection(
+            itemId = mediaId,
+            seriesId = seriesPreferenceId(),
+            streams = apiMediaStreams.orEmpty(),
+            streamIndex = streamIndex
+        )
+        _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(audioStreamIndex = streamIndex)
+    }
+
+    private fun persistSubtitlePreference(streamIndex: Int?) {
+        val context = playerContext ?: return
+        val mediaId = playbackSession.mediaId ?: return
+        com.vela.player.preferences.PlayerPreferences(context).persistSubtitleSelection(
+            itemId = mediaId,
+            seriesId = seriesPreferenceId(),
+            streams = apiMediaStreams.orEmpty(),
+            streamIndex = streamIndex
+        )
+        _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(subtitleStreamIndex = streamIndex)
+    }
+
+    private fun seriesPreferenceId(): String? {
+        return TrackDetails.seriesPreferenceId(
+            itemType = currentItemDetails?.type,
+            seriesId = currentItemDetails?.seriesId
+        )
     }
 
     private fun playbackTrackSelection(
@@ -865,8 +920,18 @@ class PlayerViewModel @Inject constructor(
         val shouldResumePlaying = isPlayingNow()
 
         com.vela.player.preferences.PlayerPreferences(context).apply {
-            setPreferredAudioStreamIndex(mediaId, audioStreamIndex)
-            setPreferredSubtitleStreamIndex(mediaId, subtitleStreamIndex)
+            persistAudioSelection(
+                itemId = mediaId,
+                seriesId = seriesPreferenceId(),
+                streams = apiMediaStreams.orEmpty(),
+                streamIndex = audioStreamIndex
+            )
+            persistSubtitleSelection(
+                itemId = mediaId,
+                seriesId = seriesPreferenceId(),
+                streams = apiMediaStreams.orEmpty(),
+                streamIndex = subtitleStreamIndex
+            )
         }
 
         releasePlayer()

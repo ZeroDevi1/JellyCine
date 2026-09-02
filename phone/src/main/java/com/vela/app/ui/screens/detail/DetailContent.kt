@@ -66,6 +66,7 @@ import com.vela.app.ui.components.common.rememberDownloadPanelProgress
 import com.vela.app.ui.components.common.rememberDownloadPanelState
 import com.vela.app.cast.CastController
 import com.vela.app.download.DownloadRepositoryProvider
+import com.vela.player.core.TrackDetails
 import com.vela.player.preferences.PlayerPreferences
 import com.vela.player.preferences.TranscodeProfile
 import com.vela.shared.playback.UserDataRefreshEvent
@@ -180,18 +181,26 @@ fun DetailContent(
         val fromSource = selectedMediaSource?.mediaStreams.orEmpty()
         if (fromSource.isNotEmpty()) fromSource else item.mediaStreams.orEmpty()
     }
-    val savedAudioOption = remember(item.id, effectiveMediaStreams, trackSelectionSyncVersion) {
+    val savedAudioOption = remember(item.id, item.seriesId, item.type, effectiveMediaStreams, trackSelectionSyncVersion) {
         val currentItemId = item.id ?: return@remember null
         AudioStreamIndex(
             streams = effectiveMediaStreams,
-            streamIndex = playerPreferences.getPreferredAudioStreamIndex(currentItemId)
+            streamIndex = playerPreferences.resolvePreferredAudioStreamIndex(
+                itemId = currentItemId,
+                seriesId = TrackDetails.seriesPreferenceId(item.type, item.seriesId),
+                streams = effectiveMediaStreams
+            )
         )
     }
-    val savedSubtitleOption = remember(item.id, effectiveMediaStreams, trackSelectionSyncVersion) {
+    val savedSubtitleOption = remember(item.id, item.seriesId, item.type, effectiveMediaStreams, trackSelectionSyncVersion) {
         val currentItemId = item.id ?: return@remember null
         SubtitleStreamIndex(
             streams = effectiveMediaStreams,
-            streamIndex = playerPreferences.getPreferredSubtitleStreamIndex(currentItemId)
+            streamIndex = playerPreferences.resolvePreferredSubtitleStreamIndex(
+                itemId = currentItemId,
+                seriesId = TrackDetails.seriesPreferenceId(item.type, item.seriesId),
+                streams = effectiveMediaStreams
+            )
         )
     }
     val initialVideoOption = remember(item.id, effectiveMediaStreams) {
@@ -680,8 +689,19 @@ fun DetailContent(
             selectedOption = subtitleOption
         )
         item.id?.let { currentItemId ->
-            playerPreferences.setPreferredAudioStreamIndex(currentItemId, audioStreamIndex)
-            playerPreferences.setPreferredSubtitleStreamIndex(currentItemId, subtitleStreamIndex)
+            val seriesId = TrackDetails.seriesPreferenceId(item.type, item.seriesId)
+            playerPreferences.persistAudioSelection(
+                itemId = currentItemId,
+                seriesId = seriesId,
+                streams = effectiveMediaStreams,
+                streamIndex = audioStreamIndex
+            )
+            playerPreferences.persistSubtitleSelection(
+                itemId = currentItemId,
+                seriesId = seriesId,
+                streams = effectiveMediaStreams,
+                streamIndex = subtitleStreamIndex
+            )
         }
         onPreferredStreamIndexesChanged(audioStreamIndex, subtitleStreamIndex)
         return audioStreamIndex to subtitleStreamIndex

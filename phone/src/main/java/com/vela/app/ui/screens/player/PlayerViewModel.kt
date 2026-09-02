@@ -42,6 +42,10 @@ import com.vela.player.core.PlayerState
 import com.vela.player.core.PlayerTrack
 import com.vela.player.core.PlayerUtils
 import com.vela.player.core.RemoteTrailerUrl
+import com.vela.player.core.TrackDetails
+import com.vela.player.core.DEFAULT_VIDEO_WIDTH_FRACTION
+import com.vela.player.core.MAX_VIDEO_WIDTH_FRACTION
+import com.vela.player.core.MIN_VIDEO_WIDTH_FRACTION
 import com.vela.player.preferences.PlayerPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -275,7 +279,8 @@ class PlayerViewModel @Inject constructor(
                     isPlaying = false,
                     playWhenReady = startPlayback,
                     hasStartedPlayback = false,
-                    error = null
+                    error = null,
+                    videoWidthFraction = DEFAULT_VIDEO_WIDTH_FRACTION
                 )
                 _playerState.value = _playerState.value.copy(
                     recapStartMs = null,
@@ -296,10 +301,8 @@ class PlayerViewModel @Inject constructor(
                 resetVrPlayback()
                 val playerPreferences = PlayerPreferences(context)
                 activePlayerEngine = forcedPlayerEngine ?: playerPreferences.getPlayerEngine()
-                val resolvedPreferredAudioStreamIndex = preferredAudioStreamIndex
-                    ?: playerPreferences.getPreferredAudioStreamIndex(mediaId)
-                val activePreferredSubtitleStreamIndex = preferredSubtitleStreamIndex
-                    ?: playerPreferences.getPreferredSubtitleStreamIndex(mediaId)
+                var resolvedPreferredAudioStreamIndex = preferredAudioStreamIndex
+                var activePreferredSubtitleStreamIndex = preferredSubtitleStreamIndex
                 val isVideoTranscodingAllowed = isVideoTranscodingAllowedForUser()
                 val isAudioTranscodingAllowed = isAudioTranscodingAllowedForUser()
                 val audioTranscodeMode = if (isAudioTranscodingAllowed) {
@@ -355,6 +358,29 @@ class PlayerViewModel @Inject constructor(
                     mediaRepository.getItemById(mediaId).getOrNull()
                 }
                 currentItemDetails = itemDetails
+                val seriesPreferenceId = TrackDetails.seriesPreferenceId(
+                    itemType = itemDetails?.type,
+                    seriesId = itemDetails?.seriesId
+                )
+                val preferenceStreams = itemDetails?.mediaStreams.orEmpty().ifEmpty {
+                    itemDetails?.mediaSources?.firstOrNull()?.mediaStreams.orEmpty()
+                }
+                resolvedPreferredAudioStreamIndex =
+                    playerPreferences.matchSeriesAudioStreamIndex(seriesPreferenceId, preferenceStreams)
+                        ?: resolvedPreferredAudioStreamIndex
+                        ?: playerPreferences.getPreferredAudioStreamIndex(mediaId)
+                activePreferredSubtitleStreamIndex =
+                    playerPreferences.matchSeriesSubtitleStreamIndex(seriesPreferenceId, preferenceStreams)
+                        ?: activePreferredSubtitleStreamIndex
+                        ?: playerPreferences.getPreferredSubtitleStreamIndex(mediaId)
+                trackSelectionCoordinator.resetPendingSelections(
+                    preferredAudioStreamIndex = resolvedPreferredAudioStreamIndex,
+                    preferredSubtitleStreamIndex = activePreferredSubtitleStreamIndex
+                )
+                _preferredStreamIndexes.value = PreferredStreamIndexes(
+                    audioStreamIndex = resolvedPreferredAudioStreamIndex,
+                    subtitleStreamIndex = activePreferredSubtitleStreamIndex
+                )
                 val resumePositionTicks = itemDetails?.userData?.playbackPositionTicks
                 val storedResumePositionMs = if (startFromBeginning) {
                     null
@@ -1655,9 +1681,7 @@ class PlayerViewModel @Inject constructor(
         val selectedTrack = _playerState.value.availableAudioTracks.firstOrNull { it.id == trackId } ?: return
         if (isMpvPlayback()) {
             val streamIndex = MPVPlayer.selectAudioTrack(mpvPlayer, selectedTrack) ?: return
-            val (preferences, mediaId) = currentMediaPreferences() ?: return
-            preferences.setPreferredAudioStreamIndex(mediaId, streamIndex)
-            _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(audioStreamIndex = streamIndex)
+            persistAudioPreference(streamIndex)
             _playerState.value = _playerState.value.copy(currentAudioTrack = selectedTrack)
             return
         }
@@ -1672,6 +1696,7 @@ class PlayerViewModel @Inject constructor(
             val playerTrackId = selectedTrack.playerTrackId ?: return
             trackSelectionCoordinator.markManualTrackSelection()
             PlayerUtils.selectAudioTrack(player, playerTrackId)
+            persistAudioPreference(selectedTrack.streamIndex)
             viewModelScope.launch {
                 delay(500)
                 updateTrackInformation()
@@ -1701,14 +1726,7 @@ class PlayerViewModel @Inject constructor(
                 track = selectedTrack,
                 externalSubtitleUrls = mpvExternalSubtitleUrls
             ) ?: return
-            val (preferences, mediaId) = currentMediaPreferences() ?: return
-            preferences.setPreferredSubtitleStreamIndex(
-                mediaId,
-                streamIndex.takeUnless { it < 0 }
-            )
-            _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(
-                subtitleStreamIndex = streamIndex.takeUnless { it < 0 }
-            )
+            persistSubtitlePreference(streamIndex.takeUnless { it < 0 } ?: -1)
             _playerState.value = _playerState.value.copy(currentSubtitleTrack = selectedTrack)
             return
         }
@@ -1725,11 +1743,41 @@ class PlayerViewModel @Inject constructor(
             Log.d(TAG, "Applying subtitle selection to ExoPlayer: $playerTrackId")
             trackSelectionCoordinator.markManualTrackSelection()
             PlayerUtils.selectSubtitleTrack(player, playerTrackId)
+            persistSubtitlePreference(selectedTrack.streamIndex ?: -1)
             viewModelScope.launch {
                 delay(500)
                 updateTrackInformation()
             }
         }
+    }
+
+    private fun persistAudioPreference(streamIndex: Int?) {
+        val (preferences, mediaId) = currentMediaPreferences() ?: return
+        preferences.persistAudioSelection(
+            itemId = mediaId,
+            seriesId = seriesPreferenceId(),
+            streams = apiMediaStreams.orEmpty(),
+            streamIndex = streamIndex
+        )
+        _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(audioStreamIndex = streamIndex)
+    }
+
+    private fun persistSubtitlePreference(streamIndex: Int?) {
+        val (preferences, mediaId) = currentMediaPreferences() ?: return
+        preferences.persistSubtitleSelection(
+            itemId = mediaId,
+            seriesId = seriesPreferenceId(),
+            streams = apiMediaStreams.orEmpty(),
+            streamIndex = streamIndex
+        )
+        _preferredStreamIndexes.value = _preferredStreamIndexes.value.copy(subtitleStreamIndex = streamIndex)
+    }
+
+    private fun seriesPreferenceId(): String? {
+        return TrackDetails.seriesPreferenceId(
+            itemType = currentItemDetails?.type,
+            seriesId = currentItemDetails?.seriesId
+        )
     }
 
     private fun currentMediaPreferences(): Pair<PlayerPreferences, String>? {
@@ -1748,8 +1796,18 @@ class PlayerViewModel @Inject constructor(
         val shouldResumePlaying = isPlayingNow()
 
         PlayerPreferences(context).apply {
-            setPreferredAudioStreamIndex(mediaId, audioStreamIndex)
-            setPreferredSubtitleStreamIndex(mediaId, subtitleStreamIndex)
+            persistAudioSelection(
+                itemId = mediaId,
+                seriesId = seriesPreferenceId(),
+                streams = apiMediaStreams.orEmpty(),
+                streamIndex = audioStreamIndex
+            )
+            persistSubtitleSelection(
+                itemId = mediaId,
+                seriesId = seriesPreferenceId(),
+                streams = apiMediaStreams.orEmpty(),
+                streamIndex = subtitleStreamIndex
+            )
         }
 
         releasePlayer()
@@ -1769,6 +1827,11 @@ class PlayerViewModel @Inject constructor(
     private val aspectRatioModes = listOf("Fit", "Zoom")
 
     private var currentResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+
+    fun setVideoWidthFraction(fraction: Float) {
+        val widthFraction = fraction.coerceIn(MIN_VIDEO_WIDTH_FRACTION, MAX_VIDEO_WIDTH_FRACTION)
+        _playerState.value = _playerState.value.copy(videoWidthFraction = widthFraction)
+    }
 
     /**
      * Toggle between fit and zoom modes

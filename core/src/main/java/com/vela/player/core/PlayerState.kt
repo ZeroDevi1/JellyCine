@@ -3,6 +3,10 @@ package com.vela.player.core
 import com.vela.data.model.AudioTranscodeMode
 import com.vela.detail.SpatializationResult
 
+const val MIN_VIDEO_WIDTH_FRACTION = 0.5f
+const val MAX_VIDEO_WIDTH_FRACTION = 2.0f
+const val DEFAULT_VIDEO_WIDTH_FRACTION = 1.0f
+
 /**
  * Player state data class
  */
@@ -59,6 +63,7 @@ data class PlayerState(
     val videoScale: Float = 1f,
     val videoOffsetX: Float = 0f,
     val videoOffsetY: Float = 0f,
+    val videoWidthFraction: Float = DEFAULT_VIDEO_WIDTH_FRACTION,
     val aspectRatioMode: String = "Fit",
     val vrDetected: Boolean = false,
     val vrFlatEnabled: Boolean = false,
@@ -81,7 +86,13 @@ data class AudioTrackInfo(
     val codec: String?,
     val playerTrackId: String? = null,
     val streamIndex: Int? = null,
-    val requiresPlaybackRestart: Boolean = false
+    val requiresPlaybackRestart: Boolean = false,
+    val title: String? = null,
+    val bitRate: Int? = null,
+    val sampleRate: Int? = null,
+    val bitDepth: Int? = null,
+    val channelLayout: String? = null,
+    val isDefault: Boolean = false
 )
 
 /**
@@ -95,7 +106,10 @@ data class SubtitleTrackInfo(
     val isDefault: Boolean = false,
     val playerTrackId: String? = null,
     val streamIndex: Int? = null,
-    val requiresPlaybackRestart: Boolean = false
+    val requiresPlaybackRestart: Boolean = false,
+    val title: String? = null,
+    val codec: String? = null,
+    val isExternal: Boolean = false
 )
 
 /**

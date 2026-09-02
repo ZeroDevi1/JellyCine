@@ -56,6 +56,7 @@ import com.vela.shared.R
 import com.vela.data.model.AudioTranscodeMode
 import com.vela.player.core.AudioTrackInfo
 import com.vela.player.core.SubtitleTrackInfo
+import com.vela.player.core.TrackDetails
 import com.vela.player.preferences.PlayerPreferences
 import com.vela.app.player.vr.VrLayout
 import com.vela.app.player.vr.VrLayoutParser
@@ -84,11 +85,12 @@ fun AudioTrackSelectionDialog(
         onDismiss = onDismiss,
         trackKey = { track -> track.id },
         isTrackSelected = { track, selected -> track.id == selected?.id },
-        trackDisplayInfo = { track ->
+                        trackDisplayInfo = { track ->
+            val lines = TrackDetails.audioDialogLines(track)
             TrackDisplayInfo(
-                title = track.label.takeIf { it.isNotBlank() }.orEmpty(),
-                subtitle = buildAudioTrackSubtitle(track),
-                description = buildAudioTrackDescription(track)
+                title = lines.first,
+                subtitle = lines.second,
+                description = lines.third
             )
         }
     )
@@ -116,11 +118,12 @@ fun SubtitleTrackSelectionDialog(
         onDismiss = onDismiss,
         trackKey = { track -> track.id },
         isTrackSelected = { track, selected -> track.id == selected?.id },
-        trackDisplayInfo = { track ->
+                        trackDisplayInfo = { track ->
+            val lines = TrackDetails.subtitleDialogLines(track)
             TrackDisplayInfo(
-                title = track.label.takeIf { it.isNotBlank() }.orEmpty(),
-                subtitle = buildSubtitleTrackSubtitle(track),
-                description = buildSubtitleTrackDescription(track)
+                title = lines.first,
+                subtitle = lines.second,
+                description = lines.third
             )
         }
     )
@@ -654,78 +657,3 @@ private data class AudioTranscodingModeOption(
     val channelSummary: String
 )
 
-private fun buildAudioTrackSubtitle(track: AudioTrackInfo): String {
-    return buildList {
-        track.language?.takeIf { it.isNotEmpty() && !it.equals("und", ignoreCase = true) }?.let {
-            add(it.uppercase())
-        }
-
-        track.codec?.takeIf { it.isNotEmpty() }?.let { codec ->
-            val codecName = when (codec.lowercase()) {
-                "aac" -> "AAC"
-                "mp3" -> "MP3"
-                "ac3" -> "Dolby Digital"
-                "eac3" -> "Dolby Digital Plus"
-                "truehd" -> "Dolby TrueHD"
-                "dts" -> "DTS"
-                "dtshd" -> "DTS-HD"
-                "flac" -> "FLAC"
-                "opus" -> "Opus"
-                "vorbis" -> "Vorbis"
-                else -> codec.uppercase()
-            }
-            add(codecName)
-        }
-
-        if (track.channelCount > 0) {
-            val channelText = when (track.channelCount) {
-                1 -> "Mono"
-                2 -> "Stereo"
-                6 -> "5.1"
-                8 -> "7.1"
-                else -> "${track.channelCount}ch"
-            }
-            add(channelText)
-        }
-    }.joinToString(" | ")
-}
-
-private fun buildAudioTrackDescription(track: AudioTrackInfo): String {
-    return buildList {
-        track.codec?.lowercase()?.let { codec ->
-            when {
-                codec.contains("truehd") -> add("Lossless Audio")
-                codec.contains("flac") -> add("Lossless Audio")
-                codec.contains("dts") -> add("High Quality Audio")
-                codec.contains("eac3") -> add("Enhanced Audio")
-                codec.contains("ac3") -> add("Standard Audio")
-                codec.contains("aac") -> add("Compressed Audio")
-                codec.contains("mp3") -> add("Basic Audio")
-            }
-        }
-
-        if (track.channelCount >= 6) {
-            add("Surround Sound")
-        }
-    }.joinToString(" | ")
-}
-
-private fun buildSubtitleTrackSubtitle(track: SubtitleTrackInfo): String {
-    return buildList {
-        track.language?.takeIf {
-            it.isNotEmpty() &&
-                !it.equals("und", ignoreCase = true)
-        }?.let {
-            add(it.uppercase())
-        }
-        if (track.isForced) add("FORCED")
-        if (track.isDefault) add("DEFAULT")
-    }.joinToString(" | ")
-}
-
-private fun buildSubtitleTrackDescription(track: SubtitleTrackInfo): String {
-    return buildList {
-        if (track.isForced) add("Forced subtitles")
-        if (track.isDefault) add("Default track")
-    }.joinToString(" | ")
-}

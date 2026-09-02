@@ -92,6 +92,7 @@ fun ControlsOverlay(
     onShowSubtitleStyle: () -> Unit = {},
     onShowSubtitleDelay: () -> Unit = {},
     onCycleAspectRatio: () -> Unit = {},
+    onAdjustVideoSize: () -> Unit = onCycleAspectRatio,
     onToggleOrientation: () -> Unit = {},
     onTitleClick: () -> Unit = {},
     onSeekBackward: () -> Unit = {},
@@ -194,6 +195,7 @@ fun ControlsOverlay(
             onShowSubtitleStyle = onShowSubtitleStyle,
             onShowSubtitleDelay = onShowSubtitleDelay,
             onCycleAspectRatio = onCycleAspectRatio,
+            onAdjustVideoSize = onAdjustVideoSize,
             onToggleOrientation = onToggleOrientation,
             onTitleClick = onTitleClick,
             onSeekBackward = onSeekBackward,
@@ -252,6 +254,7 @@ private fun PortraitPlayerOverlay(
     onShowSubtitleStyle: () -> Unit,
     onShowSubtitleDelay: () -> Unit,
     onCycleAspectRatio: () -> Unit,
+    onAdjustVideoSize: () -> Unit = onCycleAspectRatio,
     onToggleOrientation: () -> Unit,
     onTitleClick: () -> Unit = {},
     onSeekBackward: () -> Unit = {},
@@ -372,10 +375,10 @@ private fun PortraitPlayerOverlay(
                                 modifier = Modifier.size(26.dp)
                             )
                         }
-                        PlayerChromeIconButton(onClick = onCycleAspectRatio) {
+                        PlayerChromeIconButton(onClick = onAdjustVideoSize) {
                             Icon(
                                 imageVector = Icons.Outlined.AspectRatio,
-                                contentDescription = stringResource(R.string.player_settings_start_maximized),
+                                contentDescription = stringResource(R.string.player_adjust_video_size),
                                 tint = iconTint,
                                 modifier = Modifier.size(26.dp)
                             )
@@ -430,6 +433,7 @@ private fun PortraitPlayerOverlay(
                 PlayerOverflowMenu(
                     onChapters = onShowChapters,
                     onMediaInfo = onShowMediaInfo,
+                    onAdjustVideoSize = onAdjustVideoSize,
                     onDismiss = { showOverflow = false },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -1101,6 +1105,7 @@ private fun HardwarePlusButton(
 private fun PlayerOverflowMenu(
     onChapters: () -> Unit,
     onMediaInfo: () -> Unit,
+    onAdjustVideoSize: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1128,6 +1133,13 @@ private fun PlayerOverflowMenu(
                 onClick = {
                     onDismiss()
                     onMediaInfo()
+                }
+            )
+            PlayerOverflowMenuItem(
+                text = stringResource(R.string.player_adjust_video_size),
+                onClick = {
+                    onDismiss()
+                    onAdjustVideoSize()
                 }
             )
         }

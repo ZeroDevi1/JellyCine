@@ -3,8 +3,11 @@ package com.vela.player.preferences
 import android.content.Context
 import android.content.SharedPreferences
 import com.vela.data.model.AudioTranscodeMode
+import com.vela.data.model.MediaStream
 import com.vela.player.core.PlayerConstants.DEFAULT_BRIGHTNESS
 import com.vela.player.core.PlayerConstants.DEFAULT_VOLUME
+import com.vela.player.core.TrackDetails
+import com.vela.player.core.TrackFingerprint
 import kotlin.math.roundToInt
 
 /**
@@ -70,6 +73,8 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AUDIO_STREAM_INDEX_PREFIX = "audio_stream_index_"
         private const val KEY_SUBTITLE_STREAM_INDEX_PREFIX = "subtitle_stream_index_"
         private const val KEY_STREAM_INDEX_UPDATED_AT_PREFIX = "stream_index_updated_at_"
+        private const val KEY_SERIES_AUDIO_FINGERPRINT_PREFIX = "series_audio_fp_"
+        private const val KEY_SERIES_SUBTITLE_FINGERPRINT_PREFIX = "series_subtitle_fp_"
         private const val MAX_PREFERRED_STREAM_ITEMS = 500
 
         const val SUBTITLE_TEXT_SIZE_SMALL = "Small"
@@ -1271,12 +1276,118 @@ class PlayerPreferences(context: Context) {
         prunePreferredStreamIndexesIfNeeded()
     }
 
+    fun resolvePreferredAudioStreamIndex(
+        itemId: String,
+        seriesId: String?,
+        streams: List<MediaStream>
+    ): Int? {
+        matchSeriesAudioStreamIndex(seriesId, streams)?.let { return it }
+        return getPreferredAudioStreamIndex(itemId)
+    }
+
+    fun resolvePreferredSubtitleStreamIndex(
+        itemId: String,
+        seriesId: String?,
+        streams: List<MediaStream>
+    ): Int? {
+        matchSeriesSubtitleStreamIndex(seriesId, streams)?.let { return it }
+        return getPreferredSubtitleStreamIndex(itemId)
+    }
+
+    fun matchSeriesAudioStreamIndex(
+        seriesId: String?,
+        streams: List<MediaStream>
+    ): Int? {
+        return seriesAudioFingerprint(seriesId)?.let { fingerprint ->
+            TrackDetails.matchAudioIndex(streams, fingerprint)
+        }
+    }
+
+    fun matchSeriesSubtitleStreamIndex(
+        seriesId: String?,
+        streams: List<MediaStream>
+    ): Int? {
+        return seriesSubtitleFingerprint(seriesId)?.let { fingerprint ->
+            TrackDetails.matchSubtitleIndex(streams, fingerprint)
+        }
+    }
+
+    fun persistAudioSelection(
+        itemId: String,
+        seriesId: String?,
+        streams: List<MediaStream>,
+        streamIndex: Int?
+    ) {
+        setPreferredAudioStreamIndex(itemId, streamIndex)
+        val seriesKey = seriesId?.takeIf { it.isNotBlank() } ?: return
+        val fingerprint = streams
+            .firstOrNull { it.type.equals("Audio", ignoreCase = true) && it.index == streamIndex }
+            ?.let(TrackDetails::audioFingerprint)
+        setSeriesAudioFingerprint(seriesKey, fingerprint)
+    }
+
+    fun persistSubtitleSelection(
+        itemId: String,
+        seriesId: String?,
+        streams: List<MediaStream>,
+        streamIndex: Int?
+    ) {
+        setPreferredSubtitleStreamIndex(itemId, streamIndex)
+        val seriesKey = seriesId?.takeIf { it.isNotBlank() } ?: return
+        val fingerprint = when (streamIndex) {
+            null -> null
+            -1 -> TrackDetails.subtitleOffFingerprint()
+            else -> streams
+                .firstOrNull { it.type.equals("Subtitle", ignoreCase = true) && it.index == streamIndex }
+                ?.let(TrackDetails::subtitleFingerprint)
+        }
+        setSeriesSubtitleFingerprint(seriesKey, fingerprint)
+    }
+
+    private fun seriesAudioFingerprint(seriesId: String?): TrackFingerprint? {
+        val key = seriesId?.takeIf { it.isNotBlank() } ?: return null
+        return TrackFingerprint.parse(prefs.getString(seriesAudioFingerprintKey(key), null))
+    }
+
+    private fun seriesSubtitleFingerprint(seriesId: String?): TrackFingerprint? {
+        val key = seriesId?.takeIf { it.isNotBlank() } ?: return null
+        return TrackFingerprint.parse(prefs.getString(seriesSubtitleFingerprintKey(key), null))
+    }
+
+    private fun setSeriesAudioFingerprint(seriesId: String, fingerprint: TrackFingerprint?) {
+        prefs.edit().apply {
+            if (fingerprint == null) {
+                remove(seriesAudioFingerprintKey(seriesId))
+            } else {
+                putString(seriesAudioFingerprintKey(seriesId), fingerprint.serialize())
+            }
+        }.apply()
+    }
+
+    private fun setSeriesSubtitleFingerprint(seriesId: String, fingerprint: TrackFingerprint?) {
+        prefs.edit().apply {
+            if (fingerprint == null) {
+                remove(seriesSubtitleFingerprintKey(seriesId))
+            } else {
+                putString(seriesSubtitleFingerprintKey(seriesId), fingerprint.serialize())
+            }
+        }.apply()
+    }
+
     private fun audioStreamKey(itemId: String): String {
         return "$KEY_AUDIO_STREAM_INDEX_PREFIX$itemId"
     }
 
     private fun subtitleStreamKey(itemId: String): String {
         return "$KEY_SUBTITLE_STREAM_INDEX_PREFIX$itemId"
+    }
+
+    private fun seriesAudioFingerprintKey(seriesId: String): String {
+        return "$KEY_SERIES_AUDIO_FINGERPRINT_PREFIX$seriesId"
+    }
+
+    private fun seriesSubtitleFingerprintKey(seriesId: String): String {
+        return "$KEY_SERIES_SUBTITLE_FINGERPRINT_PREFIX$seriesId"
     }
 
     private fun streamUpdatedAtKey(itemId: String): String {

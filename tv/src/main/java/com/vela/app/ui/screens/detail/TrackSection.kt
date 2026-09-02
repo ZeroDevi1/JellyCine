@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vela.data.model.MediaStream
-import com.vela.player.core.defaultSubtitleDisplayTitle
+import com.vela.player.core.TrackDetails
 import com.vela.player.core.mediaStreamDisplayTitles
 
 @Composable
@@ -238,7 +238,7 @@ internal fun OptionSelectorRow(
                         text = {
                             Text(
                                 text = option,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                         },
@@ -258,17 +258,30 @@ internal fun buildVideoOptions(streams: List<MediaStream>): List<String> {
 }
 
 internal fun buildAudioOptions(streams: List<MediaStream>): List<String> {
-    return OptionLabels(mediaStreamDisplayTitles(streams, "Audio"))
+    return OptionLabels(
+        streams
+            .filter { it.type == "Audio" }
+            .sortedBy { it.index ?: Int.MAX_VALUE }
+            .map(TrackDetails::audioOptionLabel)
+    )
 }
 
 internal fun buildSubtitleOptions(streams: List<MediaStream>): List<String> {
     val options = mutableListOf("Off")
-    options += mediaStreamDisplayTitles(streams, "Subtitle")
+    options += streams
+        .filter { it.type == "Subtitle" }
+        .sortedBy { it.index ?: Int.MAX_VALUE }
+        .map(TrackDetails::subtitleOptionLabel)
     return OptionLabels(options)
 }
 
 internal fun buildDefaultSubtitleOption(streams: List<MediaStream>): String {
-    return defaultSubtitleDisplayTitle(streams)
+    return streams
+        .filter { it.type == "Subtitle" }
+        .sortedBy { it.index ?: Int.MAX_VALUE }
+        .firstOrNull { it.isDefault == true }
+        ?.let(TrackDetails::subtitleOptionLabel)
+        ?: "Off"
 }
 
 internal fun OptionLabels(options: List<String>): List<String> {

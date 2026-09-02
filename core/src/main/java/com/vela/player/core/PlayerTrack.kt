@@ -37,11 +37,7 @@ object PlayerTrack {
         val subtitleStreams = indexedStreams(mediaStreams, streamType = "Subtitle")
 
         val apiNamedAudioTracks = liveAudioTracks.mapIndexed { index, track ->
-            val stream = audioStreams.getOrNull(index)
-            track.copy(
-                label = stream?.displayTitleOrNull() ?: track.label,
-                streamIndex = stream?.index
-            )
+            TrackDetails.applyStreamDetails(track, audioStreams.getOrNull(index))
         }
         val apiNamedCurrentAudioTrack = currentLiveAudioTrack?.let { selected ->
             apiNamedAudioTracks.firstOrNull { it.id == selected.id }
@@ -69,9 +65,9 @@ object PlayerTrack {
                     usedStreamIndexes.add(stream.index!!)
                 }
 
-                track.copy(
-                    label = stream?.displayTitleOrNull() ?: track.label,
-                    streamIndex = stream?.index
+                TrackDetails.applyStreamDetails(
+                    track.copy(streamIndex = stream?.index),
+                    stream
                 )
             }
         }
@@ -82,14 +78,17 @@ object PlayerTrack {
 
         val apiAudioTracks = audioStreams.mapNotNull { stream ->
             val streamIndex = stream.index ?: return@mapNotNull null
-            AudioTrackInfo(
-                id = "audio:$streamIndex",
-                label = stream.displayTitleOrNull().orEmpty(),
-                language = null,
-                channelCount = 0,
-                codec = null,
-                streamIndex = streamIndex,
-                requiresPlaybackRestart = true
+            TrackDetails.applyStreamDetails(
+                AudioTrackInfo(
+                    id = "audio:$streamIndex",
+                    label = stream.displayTitleOrNull().orEmpty(),
+                    language = stream.language,
+                    channelCount = stream.channels ?: 0,
+                    codec = stream.codec,
+                    streamIndex = streamIndex,
+                    requiresPlaybackRestart = true
+                ),
+                stream
             )
         }
         val apiSubtitleTracks = listOf(
@@ -104,15 +103,18 @@ object PlayerTrack {
             )
         ) + subtitleStreams.mapNotNull { stream ->
             val streamIndex = stream.index ?: return@mapNotNull null
-            SubtitleTrackInfo(
-                id = "subtitle:$streamIndex",
-                label = stream.displayTitleOrNull().orEmpty(),
-                language = null,
-                isForced = false,
-                isDefault = false,
-                playerTrackId = "subtitle:$streamIndex", // set ID so it can be identified, even if not yet in player
-                streamIndex = streamIndex,
-                requiresPlaybackRestart = true
+            TrackDetails.applyStreamDetails(
+                SubtitleTrackInfo(
+                    id = "subtitle:$streamIndex",
+                    label = stream.displayTitleOrNull().orEmpty(),
+                    language = stream.language,
+                    isForced = stream.isForced == true,
+                    isDefault = stream.isDefault == true,
+                    playerTrackId = "subtitle:$streamIndex",
+                    streamIndex = streamIndex,
+                    requiresPlaybackRestart = true
+                ),
+                stream
             )
         }
 

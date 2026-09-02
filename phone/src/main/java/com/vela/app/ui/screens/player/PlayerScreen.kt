@@ -136,6 +136,7 @@ fun PlayerScreen(
     var showSubtitleTrackDialog by remember { mutableStateOf(false) }
     var showSubtitleStyleSheet by remember { mutableStateOf(false) }
     var showSubtitleDelaySheet by remember { mutableStateOf(false) }
+    var showVideoWidthSheet by remember { mutableStateOf(false) }
     var showStreamingQualityDialog by remember { mutableStateOf(false) }
     var showAudioTranscodingDialog by remember { mutableStateOf(false) }
     var pendingStreamingQualitySelection by remember { mutableStateOf<String?>(null) }
@@ -510,7 +511,7 @@ fun PlayerScreen(
         delay(180)
         hideVideoForRotation = false
     }
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
@@ -519,12 +520,18 @@ fun PlayerScreen(
         contentAlignment = Alignment.Center
     ) {
         key(isPortraitPlayback) {
+        val videoAspect = viewModel.getSourceVideoAspectRatio()?.takeIf { it > 0f } ?: (16f / 9f)
+        val screenAspect = (maxWidth / maxHeight).let { ratio ->
+            if (ratio > 0f) ratio else (16f / 9f)
+        }
+        val fitWidthRatio = if (screenAspect <= videoAspect) 1f else videoAspect / screenAspect
+        val fillWidthScale = 1f / fitWidthRatio.coerceAtLeast(0.01f)
         VideoSurface(
             player = viewModel.exoPlayer,
             mpvPlayer = viewModel.mpvPlayer,
             lifecycle = lifecycle,
             isInPictureInPictureMode = inPip,
-            scale = playerState.videoScale,
+            scale = fillWidthScale * playerState.videoWidthFraction * playerState.videoScale,
             offsetX = playerState.videoOffsetX,
             offsetY = playerState.videoOffsetY,
             resizeMode = viewModel.getCurrentResizeMode(),
@@ -603,7 +610,8 @@ fun PlayerScreen(
                 !inPip &&
                 !showPlaybackInfoSheet &&
                 !showSubtitleStyleSheet &&
-                !showSubtitleDelaySheet,
+                !showSubtitleDelaySheet &&
+                !showVideoWidthSheet,
             onToggleControls = {
                 resetAutoHideTimer()
                 uiState = uiState.copy(controlsVisible = !uiState.controlsVisible)
@@ -685,7 +693,8 @@ fun PlayerScreen(
                     !inPip &&
                     !showPlaybackInfoSheet &&
                     !showSubtitleStyleSheet &&
-                    !showSubtitleDelaySheet
+                    !showSubtitleDelaySheet &&
+                    !showVideoWidthSheet
             ),
             playerState = playerState,
             currentStreamingQuality = currentStreamingQuality,
@@ -733,6 +742,10 @@ fun PlayerScreen(
             },
             onShowSubtitleDelay = {
                 showSubtitleDelaySheet = true
+                uiState = uiState.copy(controlsVisible = false)
+            },
+            onAdjustVideoSize = {
+                showVideoWidthSheet = true
                 uiState = uiState.copy(controlsVisible = false)
             },
             onToggleOrientation = {
@@ -848,6 +861,13 @@ fun PlayerScreen(
                 playerPreferences = playerPreferences,
                 onChanged = { viewModel.refreshSubtitleAppearance() },
                 onDismiss = { showSubtitleDelaySheet = false }
+            )
+        }
+        if (showVideoWidthSheet) {
+            VideoWidthAdjustOverlay(
+                widthFraction = playerState.videoWidthFraction,
+                onWidthFractionChange = viewModel::setVideoWidthFraction,
+                onDismiss = { showVideoWidthSheet = false }
             )
         }
 
