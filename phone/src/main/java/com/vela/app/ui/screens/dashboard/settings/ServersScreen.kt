@@ -155,7 +155,6 @@ fun ServersScreen(
                 items(uiState.servers, key = { it.id }) { server ->
                     ServerAccountRow(
                         server = server,
-                        isActive = server.id == uiState.activeServerId,
                         isOnline = server.id in uiState.reachableIds,
                         enabled = !uiState.isBusy,
                         onClick = {
@@ -167,9 +166,7 @@ fun ServersScreen(
                         },
                         onAddUser = { onAddUser(server.serverUrl, server.displayName()) },
                         onRemove = {
-                            if (server.id != uiState.activeServerId) {
-                                serverPendingRemoval = server
-                            }
+                            serverPendingRemoval = server
                         }
                     )
                 }
@@ -275,7 +272,6 @@ fun ServersScreen(
 @Composable
 private fun ServerAccountRow(
     server: AuthRepository.SavedServer,
-    isActive: Boolean,
     isOnline: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -292,10 +288,7 @@ private fun ServerAccountRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .background(
-                if (isActive) MaterialTheme.colorScheme.secondaryContainer
-                else MaterialTheme.colorScheme.surfaceContainerHigh
-            )
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -330,7 +323,7 @@ private fun ServerAccountRow(
                         .size(8.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isOnline || isActive) OnlineDotColor
+                            if (isOnline) OnlineDotColor
                             else MaterialTheme.colorScheme.outline
                         )
                 )
@@ -383,7 +376,6 @@ private fun ServerAccountRow(
                     }
                 )
                 DropdownMenuItem(
-                    enabled = !isActive,
                     text = { Text(stringResource(R.string.settings_remove)) },
                     onClick = {
                         menuExpanded = false

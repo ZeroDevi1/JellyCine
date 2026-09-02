@@ -175,6 +175,7 @@ class ServersViewModel(application: Application) : AndroidViewModel(application)
     fun removeServer(serverId: String) {
         if (serverId.isBlank() || _uiState.value.isBusy) return
         viewModelScope.launch {
+            val wasActive = _uiState.value.activeServerId == serverId
             _uiState.update { it.copy(isRemoving = true, actionError = null) }
             val result = try {
                 authRepository.savedServer()
@@ -187,6 +188,10 @@ class ServersViewModel(application: Application) : AndroidViewModel(application)
 
             result.fold(
                 onSuccess = {
+                    if (wasActive) {
+                        mediaRepository.clearPersistedHomeSnapshot()
+                        CachedData.clearAllCache()
+                    }
                     _uiState.update { it.copy(isRemoving = false) }
                 },
                 onFailure = { error ->

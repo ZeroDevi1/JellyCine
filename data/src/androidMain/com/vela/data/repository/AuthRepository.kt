@@ -2,6 +2,7 @@ package com.vela.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -521,12 +522,7 @@ class AuthRepository(private val context: Context) {
 
             val removeServer = existingServers.firstOrNull { it.id == serverId }
                 ?: return Result.failure(Exception(string(R.string.auth_error_saved_server_not_found)))
-
-            if (removeServer.id == activeServerId) {
-                return Result.failure(
-                    Exception(string(R.string.auth_error_remove_active_server))
-                )
-            }
+            val removingActive = removeServer.id == activeServerId
 
             val updatedServers = existingServers
                 .filterNot { it.id == removeServer.id }
@@ -534,7 +530,9 @@ class AuthRepository(private val context: Context) {
 
             dataStore.edit { prefs ->
                 prefs[SAVED_SERVERS_KEY] = serializeSavedServers(updatedServers)
-                if (prefs[ACTIVE_SERVER_ID_KEY] == removeServer.id) {
+                if (removingActive) {
+                    clearActiveSessionKeys(prefs)
+                } else if (prefs[ACTIVE_SERVER_ID_KEY] == removeServer.id) {
                     prefs[ACTIVE_SERVER_ID_KEY] = ""
                 }
             }
@@ -1127,16 +1125,20 @@ class AuthRepository(private val context: Context) {
                 preferences[SAVED_SERVERS_KEY] = serializeSavedServers(updatedServers)
                 secureSessionStore.removeToken(activeServerId)
             }
-            preferences[LEGACY_ACCESS_TOKEN_KEY] = ""
-            preferences[USER_ID_KEY] = ""
-            preferences[USERNAME_KEY] = ""
-            preferences[SERVER_URL_KEY] = ""
-            preferences[SERVER_NAME_KEY] = ""
-            preferences[SERVER_TYPE_KEY] = ""
-            preferences[ACTIVE_SERVER_ID_KEY] = ""
-            preferences[IS_AUTHENTICATED_KEY] = false
+            clearActiveSessionKeys(preferences)
         }
         seerrRepository.disconnect(loggedOutServerId)
+    }
+
+    private fun clearActiveSessionKeys(preferences: MutablePreferences) {
+        preferences[LEGACY_ACCESS_TOKEN_KEY] = ""
+        preferences[USER_ID_KEY] = ""
+        preferences[USERNAME_KEY] = ""
+        preferences[SERVER_URL_KEY] = ""
+        preferences[SERVER_NAME_KEY] = ""
+        preferences[SERVER_TYPE_KEY] = ""
+        preferences[ACTIVE_SERVER_ID_KEY] = ""
+        preferences[IS_AUTHENTICATED_KEY] = false
     }
 
     private suspend fun legacyStorageMigrated() {
