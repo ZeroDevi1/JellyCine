@@ -25,6 +25,7 @@ import com.vela.data.network.canonicalServerUrl
 import com.vela.data.network.canonicalServerUrlKey
 import com.vela.data.network.hostFromUrl
 import com.vela.data.network.isLanHost
+import com.vela.data.network.matchesSavedServerIdentity
 import com.vela.data.network.pickPreferredReachableLine
 import com.vela.data.network.preferLan
 import com.vela.data.network.requestMatchesServerUrl
@@ -176,8 +177,7 @@ class AuthRepository(private val context: Context) {
         }
 
         fun groupingKey(): String {
-            return serverInstanceId?.takeIf { it.isNotBlank() }
-                ?: canonicalServerUrlKey(serverUrl)
+            return canonicalServerUrlKey(serverUrl)
         }
     }
 
@@ -1245,15 +1245,11 @@ class AuthRepository(private val context: Context) {
         val matched = findMatchingSavedServer(
             existing = existingServers,
             userId = userId,
-            url = baseUrl,
-            instanceId = instanceId
+            url = baseUrl
         )
-        val mergedLines = mergeLines(
-            existing = matched?.resolvedLines().orEmpty(),
-            incoming = seedLines(baseUrl, endpoint.serverInfo)
-        )
-        val active = mergedLines.firstOrNull { sameServerUrl(it.url, baseUrl) }
-            ?: mergedLines.first()
+        val lines = matched?.resolvedLines().orEmpty().ifEmpty { primaryLine(baseUrl) }
+        val active = lines.firstOrNull { sameServerUrl(it.url, baseUrl) }
+            ?: lines.first()
         return SavedServer(
             id = matched?.id ?: buildServerId(serverUrl = baseUrl, userId = userId),
             serverUrl = baseUrl,
@@ -1266,7 +1262,7 @@ class AuthRepository(private val context: Context) {
             userId = userId,
             profileImageUrl = matched?.profileImageUrl,
             lastUsedAt = System.currentTimeMillis(),
-            lines = mergedLines,
+            lines = lines,
             activeLineId = active.id,
             serverInstanceId = instanceId ?: matched?.serverInstanceId,
             note = note?.trim()?.takeIf { it.isNotBlank() } ?: matched?.note,
@@ -1278,62 +1274,27 @@ class AuthRepository(private val context: Context) {
     private fun findMatchingSavedServer(
         existing: List<SavedServer>,
         userId: String,
-        url: String,
-        instanceId: String?
+        url: String
     ): SavedServer? {
-        val sameUser = existing.filter { it.userId == userId }
-        if (!instanceId.isNullOrBlank()) {
-            sameUser.firstOrNull { it.serverInstanceId == instanceId }?.let { return it }
-        }
-        return sameUser.firstOrNull { server ->
-            sameServerUrl(server.serverUrl, url) ||
-                server.resolvedLines().any { line -> sameServerUrl(line.url, url) }
-        }
-    }
-
-    private fun seedLines(primaryUrl: String, serverInfo: ServerInfo): List<ServerLine> {
-        val discovered = linkedMapOf<String, String>()
-        val primary = canonicalServerUrl(primaryUrl)
-        discovered[canonicalServerUrlKey(primary)] = primary
-        listOf(serverInfo.localAddress, serverInfo.wanAddress).forEach { raw ->
-            normalizeDiscoveredUrl(raw, primary)?.let { url ->
-                discovered.putIfAbsent(canonicalServerUrlKey(url), url)
-            }
-        }
-        return discovered.values.mapIndexed { index, url ->
-            ServerLine(
-                id = if (index == 0) PRIMARY_LINE_ID else UUID.randomUUID().toString(),
-                name = defaultLineName(url, index + 1),
-                url = url
+        return existing.firstOrNull { server ->
+            matchesSavedServerIdentity(
+                existingUserId = server.userId,
+                existingServerUrl = server.serverUrl,
+                incomingUserId = userId,
+                incomingServerUrl = url
             )
         }
     }
 
-    private fun mergeLines(
-        existing: List<ServerLine>,
-        incoming: List<ServerLine>
-    ): List<ServerLine> {
-        if (existing.isEmpty()) return incoming
-        val merged = existing.toMutableList()
-        incoming.forEach { line ->
-            if (merged.none { sameServerUrl(it.url, line.url) }) {
-                merged += line
-            }
-        }
-        return merged
-    }
-
-    private fun normalizeDiscoveredUrl(raw: String?, primaryUrl: String): String? {
-        val value = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        val withScheme = when {
-            value.startsWith("http://", ignoreCase = true) ||
-                value.startsWith("https://", ignoreCase = true) -> value
-            else -> {
-                val scheme = primaryUrl.substringBefore("://").ifBlank { "http" }
-                "$scheme://$value"
-            }
-        }
-        return canonicalServerUrl(withScheme).takeIf { it.startsWith("http") }
+    private fun primaryLine(url: String): List<ServerLine> {
+        val primary = canonicalServerUrl(url)
+        return listOf(
+            ServerLine(
+                id = PRIMARY_LINE_ID,
+                name = defaultLineName(primary, 1),
+                url = primary
+            )
+        )
     }
 
     private fun defaultLineName(url: String, index: Int): String {
