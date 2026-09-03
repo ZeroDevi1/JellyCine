@@ -10,21 +10,22 @@ import org.junit.Test
 class HevcHwdecColorTest {
 
     @Test
-    fun unspecified4kHevcUsesCopyAndBt709Filter() {
+    fun unspecified4kHevcPrefersSoftwareAndBt709Filter() {
         val streams = listOf(unspecifiedHevc(width = 3840, height = 2160, codecTag = "hev1"))
         assertEquals(
-            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY,
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
             HevcHwdecColor.hardwareDecoding(
                 PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
                 streams
             )
         )
         assertEquals(HevcHwdecColor.BT709_FORMAT_VF, HevcHwdecColor.formatVf(streams))
-        assertTrue(HevcHwdecColor.needsCopyPath(streams))
+        assertTrue(HevcHwdecColor.needsSoftwareColorPath(streams))
+        assertTrue(HevcHwdecColor.needsBt709InputOverride(streams))
     }
 
     @Test
-    fun taggedBt709HevcKeepsZeroCopy() {
+    fun tagged4kBt709HevcPrefersSoftware() {
         val streams = listOf(
             MediaStream(
                 type = "Video",
@@ -41,18 +42,46 @@ class HevcHwdecColorTest {
             )
         )
         assertEquals(
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
+            HevcHwdecColor.hardwareDecoding(
+                PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
+                streams
+            )
+        )
+        assertTrue(HevcHwdecColor.needsSoftwareColorPath(streams))
+        assertEquals(HevcHwdecColor.BT709_FORMAT_VF, HevcHwdecColor.formatVf(streams))
+    }
+
+    @Test
+    fun tagged1080pBt709HevcKeepsHardware() {
+        val streams = listOf(
+            MediaStream(
+                type = "Video",
+                codec = "hevc",
+                codecTag = "hvc1",
+                width = 1920,
+                height = 1080,
+                colorPrimaries = "bt709",
+                colorSpace = "bt709",
+                colorTransfer = "bt709",
+                videoRange = "SDR",
+                videoRangeType = "SDR",
+                bitDepth = 8
+            )
+        )
+        assertEquals(
             PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
             HevcHwdecColor.hardwareDecoding(
                 PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
                 streams
             )
         )
+        assertFalse(HevcHwdecColor.needsSoftwareColorPath(streams))
         assertEquals("", HevcHwdecColor.formatVf(streams))
-        assertFalse(HevcHwdecColor.needsCopyPath(streams))
     }
 
     @Test
-    fun hdr10HevcKeepsZeroCopy() {
+    fun hdr10HevcKeepsHardware() {
         val streams = listOf(
             MediaStream(
                 type = "Video",
@@ -78,7 +107,7 @@ class HevcHwdecColorTest {
     }
 
     @Test
-    fun bt2020SdrUsesCopyWithoutForcing709() {
+    fun bt2020SdrPrefersSoftwareWithoutTreatingAsHdr() {
         val streams = listOf(
             MediaStream(
                 type = "Video",
@@ -94,14 +123,16 @@ class HevcHwdecColorTest {
             )
         )
         assertEquals(
-            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY,
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
             HevcHwdecColor.hardwareDecoding(
                 PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
                 streams
             )
         )
+        assertTrue(HevcHwdecColor.needsSoftwareColorPath(streams))
+        assertFalse(HevcHwdecColor.needsBt709InputOverride(streams))
         assertEquals("", HevcHwdecColor.formatVf(streams))
-        assertTrue(HevcHwdecColor.needsCopyPath(streams))
+        assertFalse(MPVPlayer.isHdr(streams))
     }
 
     @Test
@@ -117,27 +148,26 @@ class HevcHwdecColorTest {
     }
 
     @Test
-    fun alreadyCopyPreferenceIsUnchanged() {
+    fun copyPreferenceIsOverriddenToSoftware() {
         val streams = listOf(unspecifiedHevc(width = 3840, height = 2160))
         assertEquals(
-            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY,
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
             HevcHwdecColor.hardwareDecoding(
                 PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY,
                 streams
             )
         )
-        assertEquals(HevcHwdecColor.BT709_FORMAT_VF, HevcHwdecColor.formatVf(streams))
     }
 
     @Test
-    fun sdUnspecifiedHevcDoesNotForceCopy() {
-        val streams = listOf(unspecifiedHevc(width = 720, height = 480))
-        assertFalse(HevcHwdecColor.needsCopyPath(streams))
+    fun sdUnspecifiedHevcDoesNotForceSoftware() {
+        val streams = listOf(unspecifiedHevc(width = 720, height = 480, codecTag = "hvc1"))
+        assertFalse(HevcHwdecColor.needsSoftwareColorPath(streams))
         assertEquals("", HevcHwdecColor.formatVf(streams))
     }
 
     @Test
-    fun h264UnspecifiedDoesNotForceCopy() {
+    fun h264UnspecifiedDoesNotForceSoftware() {
         val streams = listOf(
             MediaStream(
                 type = "Video",
@@ -146,33 +176,19 @@ class HevcHwdecColorTest {
                 height = 1080
             )
         )
-        assertFalse(HevcHwdecColor.needsCopyPath(streams))
+        assertFalse(HevcHwdecColor.needsSoftwareColorPath(streams))
         assertEquals("", HevcHwdecColor.formatVf(streams))
     }
 
     @Test
-    fun mpvHardwareDecodingForUnspecified4kHevcUsesCopy() {
+    fun mpvHardwareDecodingForUnspecified4kHevcPrefersSoftware() {
         val streams = listOf(unspecifiedHevc(width = 3840, height = 2160, codecTag = "hev1"))
         assertEquals(
-            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY,
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE,
             MPVPlayer.hardwareDecodingFor(
                 mediaSource = null,
                 userPreference = PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC,
                 mediaStreams = streams
-            )
-        )
-        assertFalse(MPVPlayer.isHdr(streams))
-    }
-
-    @Test
-    fun bt2020SdrIsNotTreatedAsHdr() {
-        val streams = listOf(
-            MediaStream(
-                type = "Video",
-                codec = "hevc",
-                colorSpace = "bt2020nc",
-                colorTransfer = "bt709",
-                videoRange = "SDR"
             )
         )
         assertFalse(MPVPlayer.isHdr(streams))

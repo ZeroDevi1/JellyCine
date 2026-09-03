@@ -2107,13 +2107,28 @@ class PlayerViewModel @Inject constructor(
      * Get unified media metadata information for the modern bubble dialog
      */
     fun getMediaMetadataInfo(): MediaMetadataInfo {
-        return PlayerMetadata.buildMediaMetadataInfo(
+        val info = PlayerMetadata.buildMediaMetadataInfo(
             context = playerContext,
             exoPlayer = exoPlayer,
             mediaStreams = apiMediaStreams,
             mediaSourceContainer = playbackSession.mediaSourceContainer,
             mediaSourceBitrateKbps = playbackSession.mediaSourceBitrateKbps,
             playMethodDisplayName = playbackSession.playMethod.displayName
+        )
+        if (!isMpvPlayback()) return info
+        val hwdec = _playerState.value.hardwareDecoding
+        val usingHardware = hwdec != PlayerPreferences.MPV_HARDWARE_DECODING_NONE
+        return info.copy(
+            hardwareAcceleration = info.hardwareAcceleration?.copy(
+                isHardwareDecoding = usingHardware,
+                decoderType = if (usingHardware) hwdec else "Software"
+            ) ?: HardwareAccelerationInfo(
+                isHardwareDecoding = usingHardware,
+                activeVideoCodec = info.videoFormat?.codec,
+                activeAudioCodec = info.audioFormat?.codec,
+                decoderType = if (usingHardware) hwdec else "Software",
+                asyncModeEnabled = false
+            )
         )
     }
 

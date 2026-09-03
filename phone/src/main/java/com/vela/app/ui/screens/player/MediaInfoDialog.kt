@@ -129,7 +129,15 @@ fun MediaInfoDialog(
                     buildVideoDetails(mediaInfo.videoFormat)?.let { PrimaryLine(it) }
                     SecondaryLine("-> ${mediaInfo.playMethod}")
                     mediaInfo.hardwareAcceleration?.let {
-                        MixedLine("Renderer", if (it.isHardwareDecoding) "MediaCodec" else "Software")
+                        MixedLine(
+                            "Renderer",
+                            when {
+                                !it.isHardwareDecoding -> "Software"
+                                it.decoderType.contains("copy", ignoreCase = true) ->
+                                    "MediaCodec (copy)"
+                                else -> "MediaCodec"
+                            }
+                        )
                         buildDisplayMode(mediaInfo.videoFormat)?.let { mode ->
                             MixedLine("Display Mode", mode)
                         }

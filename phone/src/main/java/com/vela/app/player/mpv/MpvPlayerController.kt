@@ -62,6 +62,7 @@ class MpvPlayerController(
     private val playerPreferences = PlayerPreferences(context.applicationContext)
     private var lastDolbyRuntimePath: String? = null
     private var colorPolicyStreams: List<MediaStream>? = null
+    private var requestedHwdec: String = hardwareDecoding
     private var vrShaderActive = false
     private var hwdecBeforeVr: String? = null
     private var lastVrShaderSource: String? = null
@@ -131,6 +132,7 @@ class MpvPlayerController(
         listener.onBuffering()
         applyRemoteStreamOptions(remoteHttpPlayback)
         applyHttpRequestHeaders(requestHeaders)
+        applyColorHwdec()
         applyDolbyDecodeOptions(asOptions = false)
         val needsEmbeddedSubtitleProbe =
             selectedSubtitleUrl == null && pendingSubtitleTrackId != null
@@ -278,15 +280,37 @@ class MpvPlayerController(
     }
 
     fun setHardwareDecoding(mode: String) {
-        if (!released) {
-            MPVLib.setPropertyString("hwdec", mode)
-        }
+        if (released) return
+        requestedHwdec = mode
+        applyColorHwdec()
     }
 
     fun applyStreamColorPolicy(mediaStreams: List<MediaStream>?) {
         if (released) return
         colorPolicyStreams = mediaStreams
+        applyColorHwdec()
         applyDolbyDecodeOptions(asOptions = false)
+    }
+
+    private fun applyColorHwdec() {
+        val resolved = HevcHwdecColor.hardwareDecoding(requestedHwdec, colorPolicyStreams)
+        setMpv("hwdec", resolved)
+        Log.i(
+            COLOR_LOG_TAG,
+            "hwdec=$resolved requested=$requestedHwdec streams=${colorPolicyStreams?.size ?: 0} " +
+                "software=${HevcHwdecColor.needsSoftwareColorPath(colorPolicyStreams)}"
+        )
+    }
+
+    private fun logHwdecColor(stage: String) {
+        Log.i(
+            COLOR_LOG_TAG,
+            "$stage hwdec=${MPVLib.getPropertyString("hwdec")} " +
+                "hwdec-current=${MPVLib.getPropertyString("hwdec-current")} " +
+                "colormatrix=${MPVLib.getPropertyString("video-params/colormatrix")} " +
+                "primaries=${MPVLib.getPropertyString("video-params/primaries")} " +
+                "vf=${MPVLib.getPropertyString("vf")}"
+        )
     }
 
     fun setVrFlattenShader(
@@ -476,7 +500,9 @@ class MpvPlayerController(
                 pendingSelectedSubtitleUrl = null
                 pendingSubtitleTrackId = null
                 applySubtitlePreferences()
+                applyDolbyDecodeOptions(asOptions = false)
                 applyDolbyRuntimeOptions()
+                logHwdecColor("FILE_LOADED")
                 logSubtitleTracks("FILE_LOADED")
                 val resumePositionMs = pendingStartPositionMs
                 pendingStartPositionMs = null
@@ -495,7 +521,10 @@ class MpvPlayerController(
                     logSubtitleTracks("READY")
                 }
             }
-            MpvEvent.MPV_EVENT_VIDEO_RECONFIG -> applyDolbyRuntimeOptions()
+            MpvEvent.MPV_EVENT_VIDEO_RECONFIG -> {
+                applyDolbyRuntimeOptions()
+                logHwdecColor("VIDEO_RECONFIG")
+            }
             MpvEvent.MPV_EVENT_SHUTDOWN -> Unit
             else -> Unit
         }
@@ -615,7 +644,7 @@ class MpvPlayerController(
         Log.i(
             COLOR_LOG_TAG,
             "hwdec=${MPVLib.getPropertyString("hwdec")} vf=${vf.ifBlank { "<none>" }} " +
-                "copy=${HevcHwdecColor.needsCopyPath(colorPolicyStreams)}"
+                "software=${HevcHwdecColor.needsSoftwareColorPath(colorPolicyStreams)}"
         )
         if (asOptions) {
             MPVLib.setOptionString("vf", vf)

@@ -4,8 +4,8 @@ import com.vela.data.model.MediaStream
 import com.vela.player.preferences.PlayerPreferences
 
 /**
- * 未标注色域的 HEVC（尤其 4K / hev1）在 MediaCodec 零拷贝上会按错误矩阵上色。
- * 拷回 CPU 后由 mpv 按 BT.709 转换；BT.2020 SDR 只切 copy，不强制 709。
+ * 未标注色域的 HEVC（尤其 4K / hev1）在 MediaCodec 硬解上会按错误矩阵上色。
+ * 这是芯片侧问题，copy 硬解同样会偏色，因此这类片优先软解。
  */
 internal object HevcHwdecColor {
     const val BT709_FORMAT_VF =
@@ -15,18 +15,18 @@ internal object HevcHwdecColor {
         userPreference: String,
         mediaStreams: List<MediaStream>?
     ): String {
-        if (userPreference != PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC) {
+        if (userPreference == PlayerPreferences.MPV_HARDWARE_DECODING_NONE) {
             return userPreference
         }
-        return if (needsCopyPath(mediaStreams)) {
-            PlayerPreferences.MPV_HARDWARE_DECODING_MEDIACODEC_COPY
+        return if (needsSoftwareColorPath(mediaStreams)) {
+            PlayerPreferences.MPV_HARDWARE_DECODING_NONE
         } else {
             userPreference
         }
     }
 
     fun formatVf(mediaStreams: List<MediaStream>?): String {
-        return if (needsBt709Override(mediaStreams)) BT709_FORMAT_VF else ""
+        return if (needsBt709InputOverride(mediaStreams)) BT709_FORMAT_VF else ""
     }
 
     fun composedVf(dolbyVf: String, mediaStreams: List<MediaStream>?): String {
@@ -35,18 +35,20 @@ internal object HevcHwdecColor {
             .joinToString(",")
     }
 
-    fun needsCopyPath(mediaStreams: List<MediaStream>?): Boolean {
+    fun needsSoftwareColorPath(mediaStreams: List<MediaStream>?): Boolean {
         val video = videoStream(mediaStreams) ?: return false
         if (!isHevc(video) || isHdr(video) || !isHdOrUnknown(video)) return false
-        return hasUnspecifiedColor(video) || isBt2020Sdr(video)
+        return hasUnspecifiedColor(video) ||
+            isHev1(video) ||
+            isUhd(video) ||
+            isBt2020Sdr(video)
     }
 
-    private fun needsBt709Override(mediaStreams: List<MediaStream>?): Boolean {
+    fun needsBt709InputOverride(mediaStreams: List<MediaStream>?): Boolean {
         val video = videoStream(mediaStreams) ?: return false
-        return isHevc(video) &&
-            !isHdr(video) &&
-            isHdOrUnknown(video) &&
-            hasUnspecifiedColor(video)
+        if (!isHevc(video) || isHdr(video) || !isHdOrUnknown(video)) return false
+        if (isBt2020Sdr(video)) return false
+        return hasUnspecifiedColor(video) || isHev1(video) || isUhd(video)
     }
 
     private fun videoStream(mediaStreams: List<MediaStream>?): MediaStream? {
@@ -64,6 +66,18 @@ internal object HevcHwdecColor {
             codec.contains("hvc1") ||
             tag.contains("hev1") ||
             tag.contains("hvc1")
+    }
+
+    private fun isHev1(video: MediaStream): Boolean {
+        val tag = video.codecTag?.lowercase().orEmpty()
+        val codec = video.codec?.lowercase().orEmpty()
+        return tag.contains("hev1") || codec.contains("hev1")
+    }
+
+    private fun isUhd(video: MediaStream): Boolean {
+        val width = video.width ?: 0
+        val height = video.height ?: 0
+        return width >= 3840 || height >= 2160
     }
 
     private fun isHdOrUnknown(video: MediaStream): Boolean {
