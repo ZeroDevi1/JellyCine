@@ -616,9 +616,11 @@ class PlayerViewModel @Inject constructor(
                         ActivePlayback.setActive(true)
                         val strmHardwareDecoding = MPVPlayer.hardwareDecodingFor(
                             mediaSource = primaryMediaSource,
-                            userPreference = playerPreferences.getMpvHardwareDecoding()
+                            userPreference = playerPreferences.getMpvHardwareDecoding(),
+                            mediaStreams = apiMediaStreams
                         )
                         player.setHardwareDecoding(strmHardwareDecoding)
+                        player.applyStreamColorPolicy(apiMediaStreams)
                         Log.i(
                             "JellyCine-Sub",
                             "mpv subtitle plan index=$selectedSubtitleStreamIndex " +
@@ -713,7 +715,8 @@ class PlayerViewModel @Inject constructor(
                 }
                 val hardwareDecoding = MPVPlayer.hardwareDecodingFor(
                     mediaSource = primaryMediaSource,
-                    userPreference = userHardwareDecoding
+                    userPreference = userHardwareDecoding,
+                    mediaStreams = apiMediaStreams
                 )
                 val vrLayout = VrLayoutParser.parse(
                     mediaSourcePath = primaryMediaSource?.path,
@@ -1078,8 +1081,14 @@ class PlayerViewModel @Inject constructor(
             PlayerPreferences.MPV_HARDWARE_DECODING_NONE
         }
         preferences.setMpvHardwareDecoding(next)
-        mpvPlayer?.setHardwareDecoding(next)
-        _playerState.value = _playerState.value.copy(hardwareDecoding = next)
+        val applied = MPVPlayer.hardwareDecodingFor(
+            mediaSource = null,
+            userPreference = next,
+            mediaStreams = apiMediaStreams
+        )
+        mpvPlayer?.setHardwareDecoding(applied)
+        mpvPlayer?.applyStreamColorPolicy(apiMediaStreams)
+        _playerState.value = _playerState.value.copy(hardwareDecoding = applied)
     }
 
     fun toggleVrFlatPlayback() {

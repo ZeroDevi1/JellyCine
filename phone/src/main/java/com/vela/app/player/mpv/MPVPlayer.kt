@@ -29,10 +29,11 @@ object MPVPlayer {
     )
     fun hardwareDecodingFor(
         mediaSource: MediaSource?,
-        userPreference: String
+        userPreference: String,
+        mediaStreams: List<MediaStream>? = null
     ): String {
         // STRM 只是地址容器，不能据此禁用硬解；4K/HDR 远程流用软解反而可能无法起播。
-        return userPreference
+        return HevcHwdecColor.hardwareDecoding(userPreference, mediaStreams)
     }
 
     fun isRemoteHttpPlayback(mediaSource: MediaSource?): Boolean {
@@ -324,13 +325,36 @@ object MPVPlayer {
 
     fun isHdr(mediaStreams: List<MediaStream>?): Boolean {
         return mediaStreams.orEmpty().any { stream ->
-            stream.type.equals("Video", ignoreCase = true) &&
-                (
-                    stream.colorTransfer?.contains("2084", ignoreCase = true) == true ||
-                        stream.colorSpace?.contains("bt2020", ignoreCase = true) == true ||
-                        stream.codec?.contains("dv", ignoreCase = true) == true
-                    )
+            stream.type.equals("Video", ignoreCase = true) && isHdrVideo(stream)
         }
+    }
+
+    private fun isHdrVideo(stream: MediaStream): Boolean {
+        val transfer = stream.colorTransfer?.lowercase().orEmpty()
+        val range = stream.videoRange?.lowercase().orEmpty()
+        val rangeType = stream.videoRangeType?.lowercase().orEmpty()
+        val codec = stream.codec?.lowercase().orEmpty()
+        val codecTag = stream.codecTag?.lowercase().orEmpty()
+        if (
+            transfer.contains("2084") ||
+            transfer.contains("smpte2084") ||
+            transfer.contains("pq") ||
+            transfer.contains("hlg") ||
+            transfer.contains("arib-std-b67")
+        ) {
+            return true
+        }
+        if (rangeType.contains("dovi") || range.contains("dovi")) return true
+        if (rangeType.contains("hdr") || range == "hdr") return true
+        if (
+            codec.contains("dvhe") ||
+            codec.contains("dvh1") ||
+            codecTag.contains("dvhe") ||
+            codecTag.contains("dvh1")
+        ) {
+            return true
+        }
+        return stream.dvProfile != null || stream.rpuPresentFlag == 1
     }
 
     private fun streams(mediaStreams: List<MediaStream>?, type: String): List<MediaStream> {

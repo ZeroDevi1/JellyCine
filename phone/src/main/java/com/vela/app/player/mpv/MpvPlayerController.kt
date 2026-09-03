@@ -10,6 +10,7 @@ import android.view.Surface
 import androidx.media3.common.util.UnstableApi
 import com.vela.app.player.vr.VrFlattenFilter
 import com.vela.app.player.vr.VrLayout
+import com.vela.data.model.MediaStream
 import com.vela.player.core.PlayerUtils
 import com.vela.player.preferences.PlayerPreferences
 import com.vela.player.video.HdrCapabilityManager
@@ -30,6 +31,7 @@ class MpvPlayerController(
     companion object {
         private const val SUBTITLE_LOG_TAG = "JellyCine-Sub"
         private const val DOLBY_LOG_TAG = "MpvDolby"
+        private const val COLOR_LOG_TAG = "JellyCine-Color"
         private const val VR_LOG_TAG = "JellyCine-VR"
         private const val VR_LOOK_RELOAD_MS = 32L
     }
@@ -59,6 +61,7 @@ class MpvPlayerController(
     private var subtitleFontFamily: String = "sans-serif"
     private val playerPreferences = PlayerPreferences(context.applicationContext)
     private var lastDolbyRuntimePath: String? = null
+    private var colorPolicyStreams: List<MediaStream>? = null
     private var vrShaderActive = false
     private var hwdecBeforeVr: String? = null
     private var lastVrShaderSource: String? = null
@@ -278,6 +281,12 @@ class MpvPlayerController(
         if (!released) {
             MPVLib.setPropertyString("hwdec", mode)
         }
+    }
+
+    fun applyStreamColorPolicy(mediaStreams: List<MediaStream>?) {
+        if (released) return
+        colorPolicyStreams = mediaStreams
+        applyDolbyDecodeOptions(asOptions = false)
     }
 
     fun setVrFlattenShader(
@@ -602,7 +611,12 @@ class MpvPlayerController(
             "decode path=${options.playbackPath} vf=${options.vf.ifBlank { "<none>" }} " +
                 "vd-lavc-o=${options.vdLavcO.ifBlank { "<none>" }}"
         )
-        val vf = options.vf
+        val vf = HevcHwdecColor.composedVf(options.vf, colorPolicyStreams)
+        Log.i(
+            COLOR_LOG_TAG,
+            "hwdec=${MPVLib.getPropertyString("hwdec")} vf=${vf.ifBlank { "<none>" }} " +
+                "copy=${HevcHwdecColor.needsCopyPath(colorPolicyStreams)}"
+        )
         if (asOptions) {
             MPVLib.setOptionString("vf", vf)
             MPVLib.setOptionString("vd-lavc-o", options.vdLavcO)

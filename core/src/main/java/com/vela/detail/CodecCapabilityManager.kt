@@ -133,7 +133,6 @@ object CodecCapabilityManager {
         val videoRange = videoStream.videoRange?.lowercase().orEmpty()
         val videoRangeType = videoStream.videoRangeType?.lowercase().orEmpty()
         val colorTransfer = videoStream.colorTransfer?.lowercase().orEmpty()
-        val colorSpace = videoStream.colorSpace?.lowercase().orEmpty()
         val title = videoStream.title?.lowercase().orEmpty()
         val profile = videoStream.profile?.lowercase().orEmpty()
         val doviTitle = videoStream.videoDoViTitle?.lowercase().orEmpty()
@@ -177,12 +176,11 @@ object CodecCapabilityManager {
             colorTransfer.contains("2084") ||
             colorTransfer.contains("pq") -> return "HDR10"
             
-            // Generic HDR detection
+            // Generic HDR detection. BT.2020 仅表示色域，8bit SDR 宽色域不是 HDR。
             videoRange.contains("hdr") ||
             videoRangeType.contains("hdr") ||
             title.contains("hdr") ||
-            colorTransfer.contains("hlg") ||
-            colorSpace.contains("bt2020") -> return "HDR"
+            colorTransfer.contains("hlg") -> return "HDR"
         }
         
         return ""
